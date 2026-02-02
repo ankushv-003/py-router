@@ -82,7 +82,7 @@ namespace FASTMM
        * path implying complete path cannot be found in UBDOT,
        * an empty path is returned
        */
-      CompletePath construct_complete_path(int traj_id, const TGOpath &path,
+      CompletePath construct_complete_path(const TGOpath &path,
                                            const std::vector<NETWORK::Edge> &edges,
                                            std::vector<int> *indices,
                                            double reverse_tolerance) const;

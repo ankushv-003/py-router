@@ -28,15 +28,15 @@ namespace FASTMM
     struct Trajectory
     {
       Trajectory() : has_timestamps_(false) {};
-      Trajectory(int id_arg, const LineString &geom_arg) : id(id_arg), geom(geom_arg), has_timestamps_(false)
+      Trajectory(const LineString &geom_arg) : geom(geom_arg), has_timestamps_(false)
       {
         if (geom.get_num_points() == 0)
         {
           throw std::invalid_argument("Trajectory: must have at least one point!");
         }
       };
-      Trajectory(int id_arg, const LineString &geom_arg, const std::vector<double> &timestamps_arg)
-          : id(id_arg), geom(geom_arg), timestamps(timestamps_arg), has_timestamps_(true)
+      Trajectory(const LineString &geom_arg, const std::vector<double> &timestamps_arg)
+          : geom(geom_arg), timestamps(timestamps_arg), has_timestamps_(true)
       {
         if (geom.get_num_points() != static_cast<int>(timestamps.size()))
         {
@@ -63,7 +63,6 @@ namespace FASTMM
           prev_t = t;
         }
       }
-      int id;                         /**< Id of the trajectory */
       LineString geom;                /**< Geometry of the trajectory */
       std::vector<double> timestamps; /**< Timestamps of the trajectory */
 
@@ -79,18 +78,18 @@ namespace FASTMM
       }
 
       // Create a Trajectory from a vector of (x, y) tuples
-      static Trajectory from_xy_tuples(int id, const std::vector<std::tuple<double, double>> &data)
+      static Trajectory from_xy_tuples(const std::vector<std::tuple<double, double>> &data)
       {
         LineString geom;
         for (const auto &item : data)
         {
           geom.add_point(Point(std::get<0>(item), std::get<1>(item)));
         }
-        return Trajectory(id, geom);
+        return Trajectory(geom);
       }
 
       // Create a Trajectory from a vector of (x, y, t) tuples
-      static Trajectory from_xyt_tuples(int id, const std::vector<std::tuple<double, double, double>> &data)
+      static Trajectory from_xyt_tuples(const std::vector<std::tuple<double, double, double>> &data)
       {
         LineString geom;
         std::vector<double> timestamps;
@@ -99,7 +98,7 @@ namespace FASTMM
           geom.add_point(Point(std::get<0>(item), std::get<1>(item)));
           timestamps.push_back(std::get<2>(item));
         }
-        return Trajectory(id, geom, timestamps);
+        return Trajectory(geom, timestamps);
       }
 
       // Return as a vector of (x, y, t) tuples

@@ -16,7 +16,6 @@ It is based on <https://github.com/cyang-kth/fmm> but updated to:
 ## TODO
 
 - currently if a point from GPS trace fails (too far etc.) it's excluded from match. Should add it to match just with start == end and appropriate error code.
-- For reverse_tolerance, why not, if the movement is < reverse tolerance, just assume they're still at the same place (and it's GPS jitter)?
 - test the time apportioning.
 - If not found in UBODT, instead of bailing, do a normal djikstra lookup.
 - max_distance_between_candidates is not a hard limit in UBODT ... I think. Test this, and if needed, add an extra check.
@@ -33,21 +32,25 @@ pip install fastmm
 The simplest way to use fastmm is with the high-level `FastMapMatch` class:
 
 ```python
-from fastmm import FastMapMatch, MatchErrorCode, Network, Trajectory, TransitionMode, FastMapMatchConfig
+from pathlib import Path
+from fastmm import FastMapMatch, MatchErrorCode, Network, Trajectory, TransitionMode
 
 # Create and populate network
 network = Network()
-network.add_edge(1, source=1, target=2, geom=[(0, 0), (100, 0)])
-network.add_edge(2, source=2, target=3, geom=[(100, 0), (200, 0)])
+# Edge IDs and Node IDs are long long (64-bit) for OSM compatibility
+network.add_edge(1234567890123, source=10, target=20, geom=[[0, 0], [100, 0]])
 network.finalize()
 
 # Create matcher with automatic UBODT caching (SHORTEST mode - distance-based)
 matcher = FastMapMatch(
-    network, TransitionMode.SHORTEST, max_distance_between_candidates=300.0, cache_dir="./cache"
+    network,
+    TransitionMode.SHORTEST,
+    max_distance_between_candidates=300.0,
+    cache_dir=Path("./ubodt_cache")
 )
 
-# Match a trajectory (automatic splitting)
-trajectory = Trajectory.from_xy_tuples(1, [(10, 0), (50, 0), (150, 0)])
+# Match a trajectory of (x, y, t)
+trajectory = Trajectory.from_xy_tuples([(10, 0, 1), (50, 0, 2), (150, 0, 3)])
 result = matcher.match(
     trajectory,
     max_candidates=8,
@@ -55,14 +58,14 @@ result = matcher.match(
     gps_error=50
 )
 
-# Process successful sub-trajectories
+# Construct the points:
+matched_xyt = []
 for sub in result.subtrajectories:
     if sub.error_code == MatchErrorCode.SUCCESS:
-        print(f"Matched points {sub.start_index} to {sub.end_index}")
         for segment in sub.segments:
-            print(f"  Segment from {segment.p0} to {segment.p1}")
             for edge in segment.edges:
-                print(f"    Edge {edge.edge_id} with {len(edge.points)} points")
+                for p in edge.points:
+                    matched_xyt.append((p.x, p.y, p.t))
 ```
 
 For time-based routing you simply add a speed on all edges, and use `TransitionMode.FASTEST`. Otherwise it's the same.
@@ -186,10 +189,16 @@ Similarly to above, this gives a higher priority when the travel time is the sam
 
 ## Developing
 
-You can create stubs with
+You can run the tests with:
 
+```bash
+pytest .
 ```
-python .\generate_stubs_for_wheel.py .\python\fastmm\ .\python\fastmm\
+
+You can create stubs with:
+
+```bash
+python ./generate_stubs_for_wheel.py ./python/fastmm/ ./python/fastmm/
 ```
 
 For now, this is better than doing it in a CI/CD pipeline as Windows is painful.

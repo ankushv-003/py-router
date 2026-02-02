@@ -6,92 +6,93 @@ import typing
 __all__: list[str] = ['CANDIDATES_NOT_FOUND', 'DISCONNECTED_LAYERS', 'FASTEST', 'FastMapMatch', 'INDEX_OUT_OF_BOUNDS', 'INDEX_OUT_OF_BOUNDS_END', 'MatchCandidate', 'MatchErrorCode', 'MatchPoint', 'MatchSegment', 'MatchSegmentEdge', 'Network', 'NetworkGraph', 'SHORTEST', 'SUCCESS', 'SplitMatchResult', 'SubTrajectory', 'Trajectory', 'TransitionMode', 'UNKNOWN_ERROR']
 class FastMapMatch:
     """
-    
+
             Fast map matching algorithm using Hidden Markov Model with UBODT optimization.
-    
+
             Matches GPS trajectories to a road network by finding the most probable sequence
             of road edges, considering both emission probabilities (GPS accuracy) and transition
             probabilities (path likelihood). Uses precomputed UBODT for fast path lookups.
-        
+
     """
-    def __init__(self, network: Network, mode: TransitionMode, max_distance_between_candidates: typing.SupportsFloat | None = None, max_time_between_candidates: typing.SupportsFloat | None = None, cache_dir: str = './ubodt_cache') -> None:
+    def __init__(self, network: Network, mode: TransitionMode, max_distance_between_candidates: typing.SupportsFloat | None = None, max_time_between_candidates: typing.SupportsFloat | None = None, cache_dir: str | typing.Any = './ubodt_cache') -> None:
         """
                     Create a FastMapMatch instance with automatic UBODT management.
-        
+
                     Args:
                         network: Road network with spatial index built (call finalize() first)
                         mode: Routing mode (TransitionMode.SHORTEST for distance, FASTEST for time)
                         max_distance_between_candidates: Maximum distance in meters (for SHORTEST mode)
                         max_time_between_candidates: Maximum time in seconds (for FASTEST mode)
-                        cache_dir: Directory for caching UBODT files (default: "./ubodt_cache")
-        
+                        cache_dir: Directory for caching UBODT files (str or Path, default: "./ubodt_cache")
+
                     Note:
                         Only the relevant parameter is used depending on mode. This constructor automatically generates/loads UBODT from cache based
                         on network hash, mode, and delta. UBODT is cached for reuse.
+                        Accepts str or pathlib.Path for cache_dir.
         """
     def match(self, trajectory: Trajectory, max_candidates: typing.SupportsInt = 8, candidate_search_radius: typing.SupportsFloat, gps_error: typing.SupportsFloat, reverse_tolerance: typing.SupportsFloat = 0.0, reference_speed: typing.SupportsFloat | None = None) -> SplitMatchResult:
         """
                     Match a GPS trajectory with automatic splitting on failures.
-        
+
                     This method performs candidate search once and reuses it when matching
                     sub-trajectories. When the matching algorithm
                     encounters failures (no candidates, disconnected layers), it automatically
                     continues matching from the next viable point instead of stopping.
-        
+
                     Args:
                         trajectory: Trajectory with GPS observations (with or without timestamps)
-        
+
                         max_candidates: Maximum number of candidate edges to consider per GPS point.
                            Higher values improve matching quality in dense networks but slow
                            performance. Typical: 4-16. Default: 8.
-        
+
                         candidate_search_radius: Maximum distance to search for candidate edges
                            around each GPS point (in coordinate units). Should exceed typical GPS
                            errors. Typical: 30-100 meters. Default: 50.
-        
+
                         gps_error: Expected GPS accuracy (standard deviation in coordinate units).
                            Used in emission probability: P(obs|candidate) ~ exp(-dist²/(2*gps_error²)).
                            Higher values are more tolerant of GPS noise. Typical: 10-100 meters.
                            Default: 50.
-        
+
                         reverse_tolerance: Maximum distance allowed when routing backward along
                            an edge (in coordinate units). Set to 0 to forbid reversing, which is
                            recommended for directed road networks. Default: 0.0.
-        
+
                         transition_mode: Routing cost metric - SHORTEST (distance) or FASTEST (time).
                            Must match the mode used to create NetworkGraph and UBODT. Default: SHORTEST.
-        
+
                         reference_speed: Expected travel speed for straight-line movement between GPS
                            points (distance units per time unit). REQUIRED for FASTEST mode, unused
                            for SHORTEST mode. This represents the typical speed at which vehicles
                            travel directly between points. Lower values encourage sticking to routes,
                            higher values allow more detours. Typical: average vehicle speed like 40-60
                            in urban areas. Default: None.
-        
+
                     Returns:
                         SplitMatchResult: containing a list of sub-trajectories, each marked
                         as either successfully matched (with segments) or failed (with error code)
-        
+
                     Example:
                         Trajectory with points [0,1,2,3,4,5,6,7] where point 4 has no candidates:
                         - Returns 2 sub-trajectories: [0-3] SUCCESS, [4-4] CANDIDATES_NOT_FOUND
                         - If points 5-7 can be matched, adds [5-7] SUCCESS
                         - Much faster than calling match_trajectory() multiple times since
                           candidate lookup is done once
-        
+
                     Note:
                         The config's transition_mode must match the mode used to create the
                         NetworkGraph and UBODT. For FASTEST mode, ensure reference_speed is set.
         """
 class MatchCandidate:
     """
-    
+
             A candidate match location for a GPS observation point.
-    
+
             Represents a potential location on the road network where a GPS point might
             actually be located, accounting for GPS error. Multiple candidates per point
             are considered during matching.
-        
+
     """
     def __repr__(self) -> str:
         ...
@@ -123,17 +124,17 @@ class MatchCandidate:
 class MatchErrorCode:
     """
     Members:
-    
+
       SUCCESS : Matching succeeded
-    
+
       CANDIDATES_NOT_FOUND : No candidate edges found for trajectory
-    
+
       DISCONNECTED_LAYERS : Trajectory has disconnected layers
-    
+
       INDEX_OUT_OF_BOUNDS : Start edge index out of bounds
-    
+
       INDEX_OUT_OF_BOUNDS_END : End edge index out of bounds
-    
+
       UNKNOWN_ERROR : Unknown error occurred
     """
     CANDIDATES_NOT_FOUND: typing.ClassVar[MatchErrorCode]  # value = <MatchErrorCode.CANDIDATES_NOT_FOUND: 1>
@@ -171,12 +172,12 @@ class MatchErrorCode:
         ...
 class MatchPoint:
     """
-    
+
             A matched point along a road edge in the map matching result.
-    
+
             Represents a specific location on a matched edge, including its position
             relative to the edge start and the cumulative distance from the trajectory start.
-        
+
     """
     def __repr__(self) -> str:
         ...
@@ -217,13 +218,13 @@ class MatchPoint:
         """
 class MatchSegment:
     """
-    
+
             A continuous matched path segment between two GPS observation points.
-    
+
             Represents the matched route from one GPS point to the next, potentially
             spanning multiple road edges. Each segment contains the start/end candidates
             and the sequence of edges traversed.
-        
+
     """
     def __repr__(self) -> str:
         ...
@@ -244,12 +245,12 @@ class MatchSegment:
         """
 class MatchSegmentEdge:
     """
-    
+
             A matched road edge with interpolated points along the matched path.
-    
+
             Contains the edge ID and a sequence of matched points representing where
             the trajectory intersects or follows this edge.
-        
+
     """
     def __repr__(self) -> str:
         ...
@@ -270,32 +271,32 @@ class MatchSegmentEdge:
         """
 class Network:
     """
-    
+
             A road network consisting of nodes (junctions) and directed edges (road segments).
-    
+
             The network must be fully constructed (all edges added) before building the spatial
             index. Once the index is built, the network is ready for map matching operations.
-    
+
             Example:
                 >>> network = fastmm.Network()
                 >>> network.add_edge(1, source=10, target=20, geom=[(0, 0), (100, 0)], speed=50.0)
                 >>> network.finalize()
-        
+
     """
     def __init__(self) -> None:
         """
                     Create an empty network.
-        
+
                     Use add_edge() to populate the network with road segments, then call
                     finalize() to prepare it for map matching.
         """
     def add_edge(self, edge_id: typing.SupportsInt, source: typing.SupportsInt, target: typing.SupportsInt, geom: list, speed: typing.SupportsFloat | None = None) -> None:
         """
                     Add a directed edge (road segment) to the network.
-        
+
                     Each edge must have a unique ID and connects two nodes. The geometry defines
                     the spatial path of the edge. Speed is required for FASTEST routing mode.
-        
+
                     Args:
                         edge_id: Unique integer identifier for this edge
                         source: Node ID where the edge starts
@@ -303,95 +304,90 @@ class Network:
                         geom: List of (x, y) tuples defining the edge geometry (minimum 2 points)
                         speed: Optional speed value (distance units per time unit).
                                Required if using TransitionMode.FASTEST routing.
-        
+
                     Note:
                         Call finalize() after adding all edges.
-        
+
                     Example:
                         >>> network.add_edge(1, source=1, target=2, geom=[(0, 0), (100, 0)], speed=50.0)
         """
     def compute_hash(self) -> str:
         """
                     Compute a hash of the network structure for cache validation.
-        
+
                     The hash is computed from edge count, sampled edge IDs, sources,
                     targets, and speeds. It's used to detect network changes and
                     invalidate cached UBODT files.
-        
+
                     Returns:
                         str: 8-character hexadecimal hash string
         """
     def finalize(self) -> None:
         """
                     Build the spatial R-tree index for efficient candidate edge lookup.
-        
+
                     This MUST be called after adding all edges and before creating a NetworkGraph
                     or performing any map matching operations. The index enables fast spatial
                     queries to find nearby road segments for GPS points.
-        
+
                     Raises:
                         RuntimeError: If called on an empty network
         """
     def get_edge_count(self) -> int:
         """
                     Get the total number of edges in the network.
-        
+
                     Returns:
                         int: Number of edges
         """
     def get_node_count(self) -> int:
         """
                     Get the total number of nodes in the network.
-        
+
                     Returns:
                         int: Number of unique nodes
         """
 class NetworkGraph:
     """
-    
+
             A routing graph built from a Network for path finding.
-    
+
             The graph representation depends on the chosen routing mode:
             - SHORTEST: Uses edge distances for path costs
             - FASTEST: Uses edge travel times (distance/speed) for path costs
-    
+
             A separate graph must be created for each routing mode, and FASTEST mode
             requires that all edges have speed values defined.
-        
+
     """
     def __init__(self, network: Network, mode: TransitionMode = ...) -> None:
         """
                     Create a NetworkGraph from a Network with specified routing mode.
-        
+
                     Args:
                         network: Network with edges (must have finalize() called)
                         mode: Routing mode - SHORTEST (distance-based) or FASTEST (time-based).
                               Default is SHORTEST.
-        
+
                     Raises:
                         RuntimeError: If mode is FASTEST and any edge lacks a speed value
-        
+
                     Note:
                         Generate separate UBODT files for each routing mode, as the shortest
                         paths differ between distance-based and time-based routing.
         """
 class SplitMatchResult:
     """
-    
+
             Result of matching with automatic trajectory splitting.
-    
+
             Contains a list of sub-trajectories representing all continuous matched
             portions and failed sections of the input trajectory. Each sub-trajectory
             indicates which points it covers and whether matching succeeded or failed.
-        
+
     """
     def __repr__(self) -> str:
         ...
-    @property
-    def id(self) -> int:
-        """
-        Trajectory ID (copied from input Trajectory)
-        """
     @property
     def subtrajectories(self) -> list[SubTrajectory]:
         """
@@ -399,13 +395,13 @@ class SplitMatchResult:
         """
 class SubTrajectory:
     """
-    
+
             A continuous portion of a trajectory that was matched or failed.
-    
+
             Represents a successful match with segments. Failed portions are simply
             excluded from the results - only successfully matched sub-trajectories
             are returned in the SplitMatchResult.
-        
+
     """
     def __repr__(self) -> str:
         ...
@@ -431,35 +427,33 @@ class SubTrajectory:
         """
 class Trajectory:
     """
-    
+
             A GPS trajectory consisting of sequential observations.
-    
+
             Trajectories can include timestamps (x, y, t) for time interpolation or be
             spatial-only (x, y). The trajectory's geometry and timestamps are used during
             map matching to find the best road path.
-        
+
     """
     @staticmethod
-    def from_xy_tuples(id: typing.SupportsInt, tuples: list) -> Trajectory:
+    def from_xy_tuples(tuples: list) -> Trajectory:
         """
                     Create a Trajectory from GPS points without timestamps (spatial-only).
-        
+
                     Args:
-                        id: Unique integer identifier for this trajectory
-                        tuples: List of (x, y) tuples representing GPS observation locations
-        
+                        tuples: List of (x, y) tuples/lists representing GPS observation locations
+
                     Returns:
                         Trajectory instance without time information
         """
     @staticmethod
-    def from_xyt_tuples(id: typing.SupportsInt, tuples: list) -> Trajectory:
+    def from_xyt_tuples(tuples: list) -> Trajectory:
         """
                     Create a Trajectory from GPS points with timestamps.
-        
+
                     Args:
-                        id: Unique integer identifier for this trajectory
-                        tuples: List of (x, y, t) tuples representing GPS observations with time
-        
+                        tuples: List of (x, y, t) tuples/lists representing GPS observations with time
+
                     Returns:
                         Trajectory instance with timestamps for time interpolation
         """
@@ -472,38 +466,30 @@ class Trajectory:
     def has_timestamps(self) -> bool:
         """
                     Check if the trajectory has timestamps.
-        
+
                     Returns:
                         bool: True if timestamps are present, False otherwise
         """
     def to_xy_tuples(self) -> list:
         """
                     Export trajectory as a list of (x, y) tuples (spatial only).
-        
+
                     Returns:
                         List of tuples, each containing (x_coord, y_coord)
         """
     def to_xyt_tuples(self) -> list:
         """
                     Export trajectory as a list of (x, y, t) tuples - only if the original had timestamps.
-        
+
                     Returns:
                         List of tuples, each containing (x_coord, y_coord, timestamp)
         """
-    @property
-    def id(self) -> int:
-        """
-        Unique integer identifier for this trajectory
-        """
-    @id.setter
-    def id(self, arg0: typing.SupportsInt) -> None:
-        ...
 class TransitionMode:
     """
     Members:
-    
+
       SHORTEST : Distance-based routing
-    
+
       FASTEST : Time-based routing
     """
     FASTEST: typing.ClassVar[TransitionMode]  # value = <TransitionMode.FASTEST: 1>

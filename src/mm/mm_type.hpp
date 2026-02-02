@@ -87,7 +87,6 @@ namespace FASTMM
      */
     struct MatchResult
     {
-      int id;                                  /**< id of the trajectory to be matched */
       MatchedCandidatePath opt_candidate_path; /**< A vector of candidate matched to each point of a trajectory. It is stored in order to export more detailed map matching information. */
       OptimalPath optimal_path;                /**< the optimal path, containing id of edges matched to each point in a trajectory */
       CompletePath complete_path;              /**< the complete path, containing ids of a sequence of topologically connected edges traversed by the trajectory.  */
@@ -109,7 +108,7 @@ namespace FASTMM
 
     struct PyMatchSegmentEdge
     {
-      long long edge_id;
+      NETWORK::EdgeID edge_id;
       std::vector<PyMatchPoint> points;
       bool reversed; // True if geometry is reversed (offset1 > offset2 on same edge)
     };
@@ -145,7 +144,6 @@ namespace FASTMM
      */
     struct PySplitMatchResult
     {
-      int id;                                       /**< id of the trajectory */
       std::vector<PySubTrajectory> subtrajectories; /**< List of sub-trajectory matches (both successful and failed) */
     };
   };

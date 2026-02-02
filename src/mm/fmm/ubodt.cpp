@@ -64,7 +64,7 @@ std::vector<EdgeIndex> UBODT::look_sp_path(NodeIndex source,
   return edges;
 }
 
-CompletePath UBODT::construct_complete_path(int traj_id, const TGOpath &path,
+CompletePath UBODT::construct_complete_path(const TGOpath &path,
                                             const std::vector<Edge> &edges,
                                             std::vector<int> *indices,
                                             double reverse_tolerance) const
@@ -95,9 +95,9 @@ CompletePath UBODT::construct_complete_path(int traj_id, const TGOpath &path,
         SPDLOG_DEBUG("Edges not found connecting a b");
         SPDLOG_DEBUG("reverse movement {} tolerance {}",
                      a->offset - b->offset, reverse_tolerance);
-        SPDLOG_WARN("Traj {} unmatched as edge {} L {} offset {}"
+        SPDLOG_WARN("Traj unmatched as edge {} L {} offset {}"
                     " and edge {} L {} offset {} disconnected",
-                    traj_id, a->edge->id, a->edge->length, a->offset,
+                    a->edge->id, a->edge->length, a->offset,
                     b->edge->id, b->edge->length, b->offset);
 
         indices->clear();
