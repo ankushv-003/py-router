@@ -182,7 +182,6 @@ MatchResult FastMapMatch::match_trajectory(const Trajectory &trajectory, const F
     TrajectoryCandidates tc = network_.search_tr_cs_knn(trajectory.geom, config.max_candidates, config.candidate_search_radius);
     SPDLOG_DEBUG("Trajectory candidate {}", tc);
     MatchResult result = MatchResult{};
-    result.id = trajectory.id;
     result.error_code = MatchErrorCode::UNKNOWN_ERROR;
     std::vector<int> unmatched_indices;
     for (int i = 0; i < tc.size(); ++i)
@@ -195,7 +194,7 @@ MatchResult FastMapMatch::match_trajectory(const Trajectory &trajectory, const F
 
     if (!unmatched_indices.empty())
     {
-        SPDLOG_DEBUG("No candidates found for trajectory {} at points {}", trajectory.id, unmatched_indices);
+        SPDLOG_DEBUG("No candidates found for trajectory at points {}", unmatched_indices);
         result.error_code = MatchErrorCode::CANDIDATES_NOT_FOUND;
         return result;
     }
@@ -208,7 +207,7 @@ MatchResult FastMapMatch::match_trajectory(const Trajectory &trajectory, const F
     int last_connected = update_tg(&tg, trajectory, config, &all_connected);
     if (!all_connected)
     {
-        SPDLOG_DEBUG("Traj {} unmatched at trajectory point {}", trajectory.id, last_connected);
+        SPDLOG_DEBUG("Traj unmatched at trajectory point {}", last_connected);
         result.error_code = MatchErrorCode::DISCONNECTED_LAYERS;
         return result;
     }
@@ -224,7 +223,7 @@ MatchResult FastMapMatch::match_trajectory(const Trajectory &trajectory, const F
                    { return a->c->edge->id; });
     std::vector<int> indices;
     const std::vector<Edge> &edges = network_.get_edges();
-    CompletePath complete_path = ubodt_->construct_complete_path(trajectory.id, tg_opath, edges, &indices, config.reverse_tolerance);
+    CompletePath complete_path = ubodt_->construct_complete_path(tg_opath, edges, &indices, config.reverse_tolerance);
     SPDLOG_DEBUG("Opath is {}", optimal_path);
     SPDLOG_DEBUG("Indices is {}", indices);
     SPDLOG_DEBUG("Complete path is {}", complete_path);
@@ -330,7 +329,7 @@ int FastMapMatch::update_tg(TransitionGraph *tg, const Trajectory &trajectory, c
         update_layer(i, &(layers[i]), &(layers[i + 1]), euclidean_distances[i], config, &layer_connected);
         if (!layer_connected)
         {
-            SPDLOG_DEBUG("Traj {} unmatched as point {} and {} not connected", trajectory.id, i, i + 1);
+            SPDLOG_DEBUG("Traj unmatched as point {} and {} not connected", i, i + 1);
             if (all_connected != nullptr)
             {
                 *all_connected = false;
@@ -419,10 +418,9 @@ PySplitMatchResult FastMapMatch::pymatch_trajectory(const CORE::Trajectory &traj
         mode_,
         reference_speed);
     PySplitMatchResult output;
-    output.id = trajectory.id;
     int N = trajectory.geom.get_num_points();
 
-    SPDLOG_DEBUG("Split matching trajectory {} with {} points", trajectory.id, N);
+    SPDLOG_DEBUG("Split matching trajectory with {} points", N);
 
     // Do candidate search once for all points
     TrajectoryCandidates tc = network_.search_tr_cs_knn(trajectory.geom, config.max_candidates, config.candidate_search_radius);
@@ -580,7 +578,7 @@ PySplitMatchResult FastMapMatch::pymatch_trajectory(const CORE::Trajectory &traj
 
         std::vector<int> indices;
         const std::vector<Edge> &edges = network_.get_edges();
-        CompletePath complete_path = ubodt_->construct_complete_path(trajectory.id, tg_opath, edges, &indices, config.reverse_tolerance);
+        CompletePath complete_path = ubodt_->construct_complete_path(tg_opath, edges, &indices, config.reverse_tolerance);
 
         // Build PyMatchSegments
         PySubTrajectory success_sub;
@@ -663,7 +661,7 @@ std::vector<PyMatchSegment> FastMapMatch::build_py_segments(const MatchedCandida
 
             for (int j = 0; j < line.get_num_points(); ++j)
             {
-                double d = distances[j - 1];
+                double d = (j == 0) ? 0.0 : distances[j - 1];
                 if (j > 0)
                 {
                     cumulative_distance += d;
@@ -684,7 +682,7 @@ std::vector<PyMatchSegment> FastMapMatch::build_py_segments(const MatchedCandida
             double d;
             for (int j = 0; j < line.get_num_points(); ++j)
             {
-                d = distances[j - 1];
+                d = (j == 0) ? 0.0 : distances[j - 1];
                 if (j > 0)
                 {
                     cumulative_distance += d;
@@ -705,7 +703,7 @@ std::vector<PyMatchSegment> FastMapMatch::build_py_segments(const MatchedCandida
 
                 for (int k = 0; k < line.get_num_points(); ++k)
                 {
-                    d = distances[k - 1];
+                    d = (k == 0) ? 0.0 : distances[k - 1];
                     if (k > 0)
                     {
                         cumulative_distance += d;
@@ -725,7 +723,7 @@ std::vector<PyMatchSegment> FastMapMatch::build_py_segments(const MatchedCandida
 
             for (int j = 0; j < line.get_num_points(); ++j)
             {
-                d = distances[j - 1];
+                d = (j == 0) ? 0.0 : distances[j - 1];
                 if (j > 0)
                 {
                     cumulative_distance += d;

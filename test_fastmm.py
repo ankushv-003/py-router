@@ -96,19 +96,17 @@ class TestTrajectoryCreation:
 
     def test_create_trajectory_from_xy(self):
         """Test creating trajectory from (x, y) tuples."""
-        traj = Trajectory.from_xy_tuples(1, [(0, 0), (100, 0), (200, 0)])
-        assert traj.id == 1
+        traj = Trajectory.from_xy_tuples([(0, 0), (100, 0), (200, 0)])
         assert len(traj) == 3
 
     def test_create_trajectory_from_xyt(self):
         """Test creating trajectory from (x, y, t) tuples."""
-        traj = Trajectory.from_xyt_tuples(2, [(0, 0, 0), (100, 0, 10), (200, 0, 20)])
-        assert traj.id == 2
+        traj = Trajectory.from_xyt_tuples([(0, 0, 0), (100, 0, 10), (200, 0, 20)])
         assert len(traj) == 3
 
     def test_trajectory_to_xy_tuples(self):
         """Test exporting trajectory to (x, y) tuples."""
-        traj = Trajectory.from_xy_tuples(1, [(0, 0), (100, 0)])
+        traj = Trajectory.from_xy_tuples([(0, 0), (100, 0)])
         xy_tuples = traj.to_xy_tuples()
         assert len(xy_tuples) == 2
         assert xy_tuples[0] == (0, 0)
@@ -116,7 +114,7 @@ class TestTrajectoryCreation:
 
     def test_trajectory_to_xyt_tuples(self):
         """Test exporting trajectory to (x, y, t) tuples."""
-        traj = Trajectory.from_xyt_tuples(1, [(0, 0, 5), (100, 0, 10)])
+        traj = Trajectory.from_xyt_tuples([(0, 0, 5), (100, 0, 10)])
         xyt_tuples = traj.to_xyt_tuples()
         assert len(xyt_tuples) == 2
         assert xyt_tuples[0] == (0, 0, 5)
@@ -125,13 +123,12 @@ class TestTrajectoryCreation:
     def test_trajectory_with_decreasing_timestamps_fails(self):
         """Test that creating trajectory with non-increasing timestamps fails."""
         with pytest.raises(ValueError, match="non-decreasing"):
-            Trajectory.from_xyt_tuples(1, [(0, 0, 10), (100, 0, 5), (200, 0, 15)])
+            Trajectory.from_xyt_tuples([(0, 0, 10), (100, 0, 5), (200, 0, 15)])
 
     def test_trajectory_with_equal_timestamps_succeeds(self):
         """Test that trajectory with equal consecutive timestamps is allowed."""
         # Non-decreasing means t[i] <= t[i+1], so equal timestamps are OK
-        traj = Trajectory.from_xyt_tuples(1, [(0, 0, 10), (100, 0, 10), (200, 0, 15)])
-        assert traj.id == 1
+        traj = Trajectory.from_xyt_tuples([(0, 0, 10), (100, 0, 10), (200, 0, 15)])
         assert len(traj) == 3
 
 
@@ -194,7 +191,7 @@ class TestShortestVsFastest:
             network, TransitionMode.SHORTEST, max_distance_between_candidates=5000, cache_dir=".cache"
         )
         # Trajectory through A->B->?->C->D
-        t = Trajectory.from_xyt_tuples(1, [(25, 0, 0), (75, 0, 5), (150, 5, 10), (225, 0, 15), (275, 0, 20)])
+        t = Trajectory.from_xyt_tuples([(25, 0, 0), (75, 0, 5), (150, 5, 10), (225, 0, 15), (275, 0, 20)])
         result = matcher.match(t, max_candidates=8, candidate_search_radius=15, gps_error=5)
         assert len(result.subtrajectories) == 1
         result = result.subtrajectories[0]
@@ -222,7 +219,7 @@ class TestShortestVsFastest:
         network = network_with_detour
         matcher = FastMapMatch(network, TransitionMode.FASTEST, max_time_between_candidates=5000, cache_dir=".cache")
         # Trajectory through A->B->?->C->D
-        t = Trajectory.from_xyt_tuples(1, [(25, 0, 0), (75, 0, 5), (150, 5, 10), (225, 0, 15), (275, 0, 20)])
+        t = Trajectory.from_xyt_tuples([(25, 0, 0), (75, 0, 5), (150, 5, 10), (225, 0, 15), (275, 0, 20)])
         result = matcher.match(t, max_candidates=8, candidate_search_radius=15, gps_error=5, reference_speed=50)
         assert len(result.subtrajectories) == 1
         result = result.subtrajectories[0]
@@ -258,10 +255,8 @@ class TestMatchResult:
             max_distance_between_candidates=1000,
             cache_dir=".cache/test_match_result_structure",
         )
-        t = Trajectory.from_xy_tuples(1, [(10, 0), (90, 0)])
+        t = Trajectory.from_xy_tuples([(10, 0), (90, 0)])
         result = matcher.match(t, max_candidates=4, candidate_search_radius=50, gps_error=50)
-        assert result.id == 1
-        assert hasattr(result, "id")
         assert hasattr(result, "subtrajectories")
 
         # Check result structure
@@ -281,7 +276,7 @@ class TestMatchResult:
         matcher = FastMapMatch(
             network, TransitionMode.SHORTEST, max_distance_between_candidates=1000, cache_dir=".cache"
         )
-        t = Trajectory.from_xy_tuples(1, [(10, 0), (150, 0)])
+        t = Trajectory.from_xy_tuples([(10, 0), (150, 0)])
         result = matcher.match(t, max_candidates=4, candidate_search_radius=50, gps_error=50)
         assert len(result.subtrajectories) == 1
         result = result.subtrajectories[0]
@@ -314,10 +309,9 @@ class TestSplitMatching:
             cache_dir=".cache/test_split_match_result_structure",
         )
         # Simple trajectory that should match completely
-        t = Trajectory.from_xy_tuples(1, [(10, 0), (50, 0), (150, 0)])
+        t = Trajectory.from_xy_tuples([(10, 0), (50, 0), (150, 0)])
         result = matcher.match(t, max_candidates=4, candidate_search_radius=50, gps_error=50)
 
-        assert result.id == 1
         assert len(result.subtrajectories) >= 1
         # Should have at least one successful sub-trajectory
         success_count = sum(1 for sub in result.subtrajectories if sub.error_code == MatchErrorCode.SUCCESS)
@@ -335,7 +329,6 @@ class TestSplitMatching:
         )
         # Trajectory with point far from network
         t = Trajectory.from_xy_tuples(
-            1,
             [
                 (10, 0),  # Point 0 - near network
                 (50, 0),  # Point 1 - near network
@@ -345,7 +338,6 @@ class TestSplitMatching:
             ],
         )
         result = matcher.match(t, max_candidates=4, candidate_search_radius=30, gps_error=20)
-        assert result.id == 1
 
         # Should have successfully matched portions (points 0-1 and 3-4)
         # Point 2 is just skipped (no single-point sub-trajectories added)
@@ -369,11 +361,10 @@ class TestSplitMatching:
         matcher = FastMapMatch(
             network, TransitionMode.SHORTEST, max_distance_between_candidates=1000, cache_dir=".cache"
         )
-        t = Trajectory.from_xy_tuples(1, [(10, 0), (50, 0)])
+        t = Trajectory.from_xy_tuples([(10, 0), (50, 0)])
         result = matcher.match(t, max_candidates=4, candidate_search_radius=50, gps_error=50)
 
         # Check result structure
-        assert hasattr(result, "id")
         assert hasattr(result, "subtrajectories")
         assert isinstance(result.subtrajectories, list)
 
@@ -412,7 +403,6 @@ class TestSplitMatching:
         # Use max_candidates=1 and small radius to ensure we get the closest edge only
         # First, test with regular matching to see what happens
         t = Trajectory.from_xy_tuples(
-            0,
             [
                 (150, 0),  # Point on edge 2 (middle of 100-200)
                 (750, 0),  # Point on edge 8 (middle of 700-800) - very far away
@@ -425,7 +415,6 @@ class TestSplitMatching:
         # - All have candidates (near roads)
         # - But some consecutive points are beyond UBODT delta distance
         t = Trajectory.from_xy_tuples(
-            1,
             [
                 (50, 0),  # Point 0 - on edge 1 (middle of 0-100)
                 (150, 0),  # Point 1 - on edge 2 (middle of 100-200)
@@ -434,7 +423,6 @@ class TestSplitMatching:
             ],
         )
         result = matcher.match(t, max_candidates=1, candidate_search_radius=30, gps_error=50)
-        assert result.id == 1
 
         # Should split into at least 2 sub-trajectories due to disconnection
         # Point 1 (edge 2) to Point 2 (edge 7) requires path distance of ~400-500 units
@@ -475,7 +463,7 @@ class TestReversedGeometry:
 
         # Allow reverse tolerance for backward movement
         # GPS points that move backward: 80m -> 30m on same edge
-        t = Trajectory.from_xy_tuples(1, [(80, 0), (30, 0)])
+        t = Trajectory.from_xy_tuples([(80, 0), (30, 0)])
 
         result = matcher.match(
             t,
@@ -501,7 +489,7 @@ class TestReversedGeometry:
 
         # Allow reverse tolerance for backward movement
         # GPS points that move backward: 80m -> 30m on same edge
-        t = Trajectory.from_xy_tuples(1, [(80, 0), (30, 0)])
+        t = Trajectory.from_xy_tuples([(80, 0), (30, 0)])
         result = matcher.match(
             t,
             max_candidates=4,
@@ -548,7 +536,7 @@ class TestReversedGeometry:
             cache_dir=".cache/test_not_reversed",
         )
         # Normal forward movement: 30m -> 80m
-        t = Trajectory.from_xy_tuples(1, [(30, 0), (80, 0)])
+        t = Trajectory.from_xy_tuples([(30, 0), (80, 0)])
         result = matcher.match(t, max_candidates=4, candidate_search_radius=50, gps_error=50)
         assert len(result.subtrajectories) == 1
         result = result.subtrajectories[0]
@@ -577,7 +565,7 @@ class TestReversedGeometry:
             cache_dir=".cache/test_reversed_consistency",
         )
         # Backward movement on multi-segment edge
-        t = Trajectory.from_xy_tuples(1, [(90, 0), (40, 0)])
+        t = Trajectory.from_xy_tuples([(90, 0), (40, 0)])
         result = matcher.match(t, max_candidates=4, candidate_search_radius=50, gps_error=50, reverse_tolerance=60)
         assert len(result.subtrajectories) == 1
 

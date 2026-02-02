@@ -56,7 +56,7 @@ PYBIND11_MODULE(fastmm, m)
             Use add_edge() to populate the network with road segments, then call
             finalize() to prepare it for map matching.
         )pbdoc")
-        .def("add_edge", [](Network &self, int edge_id, int source, int target, py::list coords, std::optional<double> speed)
+        .def("add_edge", [](Network &self, EdgeID edge_id, NodeID source, NodeID target, py::list coords, std::optional<double> speed)
              {
             LineString geom;
             for (auto item : coords) {
@@ -80,9 +80,9 @@ PYBIND11_MODULE(fastmm, m)
             the spatial path of the edge. Speed is required for FASTEST routing mode.
 
             Args:
-                edge_id: Unique integer identifier for this edge
-                source: Node ID where the edge starts
-                target: Node ID where the edge ends
+                edge_id: Unique identifier for this edge (long long)
+                source: Node ID where the edge starts (long long)
+                target: Node ID where the edge ends (long long)
                 geom: List of (x, y) tuples defining the edge geometry (minimum 2 points)
                 speed: Optional speed value (distance units per time unit).
                        Required if using TransitionMode.FASTEST routing.
@@ -237,7 +237,7 @@ PYBIND11_MODULE(fastmm, m)
                       "List of PyMatchSegmentEdge objects forming the path from p0 to p1")
         .def("__repr__", [](const PyMatchSegment &s)
              { return "<Segment from (" + fmt::format("{:.1f}", s.p0.x) + ", " + fmt::format("{:.1f}", s.p0.y) + ", " + (s.p0.t < 0 ? "null" : fmt::format("{:.1f}", s.p0.t)) +
-                      ") to (" + fmt::format("{:.1f}", s.p1.x) + ", " + fmt::format("{:.1f}", s.p1.y) + ", " + fmt::format("{:.1f}", s.p1.t) +
+                      ") to (" + fmt::format("{:.1f}", s.p1.x) + ", " + fmt::format("{:.1f}", s.p1.y) + ", " + (s.p1.t < 0 ? "null" : fmt::format("{:.1f}", s.p1.t)) +
                       ") with " + std::to_string(s.edges.size()) + " edges>"; });
 
     // SubTrajectory struct
@@ -271,8 +271,6 @@ PYBIND11_MODULE(fastmm, m)
         portions and failed sections of the input trajectory. Each sub-trajectory
         indicates which points it covers and whether matching succeeded or failed.
     )pbdoc")
-        .def_readonly("id", &PySplitMatchResult::id,
-                      "Trajectory ID (copied from input Trajectory)")
         .def_readonly("subtrajectories", &PySplitMatchResult::subtrajectories,
                       "List of SubTrajectory objects (both successful and failed portions)")
         .def("__repr__", [](const PySplitMatchResult &r)
@@ -286,8 +284,7 @@ PYBIND11_MODULE(fastmm, m)
                          failed_count++;
                      }
                  }
-                 return "<SplitMatch id=" + std::to_string(r.id) +
-                        " total_subs=" + std::to_string(r.subtrajectories.size()) +
+                 return "<SplitMatch total_subs=" + std::to_string(r.subtrajectories.size()) +
                         " success=" + std::to_string(success_count) +
                         " failed=" + std::to_string(failed_count) + ">"; });
 
@@ -299,13 +296,10 @@ PYBIND11_MODULE(fastmm, m)
         spatial-only (x, y). The trajectory's geometry and timestamps are used during
         map matching to find the best road path.
     )pbdoc")
-        .def_readwrite("id", &Trajectory::id,
-                       "Unique integer identifier for this trajectory")
         .def("__len__", [](const Trajectory &self)
              { return self.geom.get_num_points(); }, "Number of GPS observation points in the trajectory")
         .def("__repr__", [](const Trajectory &self)
-             { return "<Trajectory id=" + std::to_string(self.id) +
-                      " num_points=" + std::to_string(self.geom.get_num_points()) +
+             { return "<Trajectory num_points=" + std::to_string(self.geom.get_num_points()) +
                       (self.has_timestamps() ? " with timestamps" : " no timestamps") + ">"; })
         .def("has_timestamps", &Trajectory::has_timestamps,
              R"pbdoc(
@@ -340,49 +334,47 @@ PYBIND11_MODULE(fastmm, m)
             Returns:
                 List of tuples, each containing (x_coord, y_coord)
         )pbdoc")
-        .def_static("from_xyt_tuples", [](int id, py::list tuples)
+        .def_static("from_xyt_tuples", [](py::list tuples)
                     {
                 std::vector<std::tuple<double, double, double>> data;
                 for (auto item : tuples) {
-                    if (py::isinstance<py::tuple>(item) && py::len(item) == 3) {
-                        py::tuple tup = item.cast<py::tuple>();
-                        double x = py::float_(tup[0]);
-                        double y = py::float_(tup[1]);
-                        double t = py::float_(tup[2]);
+                    if ((py::isinstance<py::tuple>(item) || py::isinstance<py::list>(item)) && py::len(item) == 3) {
+                        py::sequence seq = item.cast<py::sequence>();
+                        double x = py::float_(seq[0]);
+                        double y = py::float_(seq[1]);
+                        double t = py::float_(seq[2]);
                         data.emplace_back(x, y, t);
                     } else {
-                        throw std::runtime_error("Each item must be a tuple (x, y, t)");
+                        throw std::runtime_error("Each item must be a 3-element tuple or list (x, y, t)");
                     }
                 }
-                return Trajectory::from_xyt_tuples(id, data); }, py::arg("id"), py::arg("tuples"), R"pbdoc(
+                return Trajectory::from_xyt_tuples(data); }, py::arg("tuples"), R"pbdoc(
             Create a Trajectory from GPS points with timestamps.
 
             Args:
-                id: Unique integer identifier for this trajectory
-                tuples: List of (x, y, t) tuples representing GPS observations with time
+                tuples: List of (x, y, t) tuples/lists representing GPS observations with time
 
             Returns:
                 Trajectory instance with timestamps for time interpolation
         )pbdoc")
-        .def_static("from_xy_tuples", [](int id, py::list tuples)
+        .def_static("from_xy_tuples", [](py::list tuples)
                     {
                 std::vector<std::tuple<double, double>> data;
                 for (auto item : tuples) {
-                    if (py::isinstance<py::tuple>(item) && py::len(item) == 2) {
-                        py::tuple tup = item.cast<py::tuple>();
-                        double x = py::float_(tup[0]);
-                        double y = py::float_(tup[1]);
+                    if ((py::isinstance<py::tuple>(item) || py::isinstance<py::list>(item)) && py::len(item) == 2) {
+                        py::sequence seq = item.cast<py::sequence>();
+                        double x = py::float_(seq[0]);
+                        double y = py::float_(seq[1]);
                         data.emplace_back(x, y);
                     } else {
-                        throw std::runtime_error("Each item must be a tuple (x, y)");
+                        throw std::runtime_error("Each item must be a 2-element tuple or list (x, y)");
                     }
                 }
-                return Trajectory::from_xy_tuples(id, data); }, py::arg("id"), py::arg("tuples"), R"pbdoc(
+                return Trajectory::from_xy_tuples(data); }, py::arg("tuples"), R"pbdoc(
             Create a Trajectory from GPS points without timestamps (spatial-only).
 
             Args:
-                id: Unique integer identifier for this trajectory
-                tuples: List of (x, y) tuples representing GPS observation locations
+                tuples: List of (x, y) tuples/lists representing GPS observation locations
 
             Returns:
                 Trajectory instance without time information
@@ -396,13 +388,26 @@ PYBIND11_MODULE(fastmm, m)
         of road edges, considering both emission probabilities (GPS accuracy) and transition
         probabilities (path likelihood). Uses precomputed UBODT for fast path lookups.
     )pbdoc")
-        .def(py::init<const Network &, TransitionMode, std::optional<double>, std::optional<double>, const std::string &>(),
-             py::arg("network"),
-             py::arg("mode"),
-             py::arg("max_distance_between_candidates") = std::nullopt,
-             py::arg("max_time_between_candidates") = std::nullopt,
-             py::arg("cache_dir") = "./ubodt_cache",
-             R"pbdoc(
+        // Accept cache_dir as pathlib.Path (or any object with __fspath__)
+        .def(
+            py::init([](const Network &network, TransitionMode mode, std::optional<double> max_distance_between_candidates, std::optional<double> max_time_between_candidates, py::object cache_dir)
+                     {
+                // Accept str or Path-like (with __fspath__)
+                std::string cache_dir_str;
+                if (py::isinstance<py::str>(cache_dir)) {
+                    cache_dir_str = cache_dir.cast<std::string>();
+                } else if (py::hasattr(cache_dir, "__fspath__")) {
+                    cache_dir_str = py::str(cache_dir.attr("__fspath__")());
+                } else {
+                    throw std::invalid_argument("cache_dir must be a str or Path-like object");
+                }
+                return new FastMapMatch(network, mode, max_distance_between_candidates, max_time_between_candidates, cache_dir_str); }),
+            py::arg("network"),
+            py::arg("mode"),
+            py::arg("max_distance_between_candidates") = std::nullopt,
+            py::arg("max_time_between_candidates") = std::nullopt,
+            py::arg("cache_dir") = "./ubodt_cache",
+            R"pbdoc(
             Create a FastMapMatch instance with automatic UBODT management.
 
             Args:
@@ -410,11 +415,12 @@ PYBIND11_MODULE(fastmm, m)
                 mode: Routing mode (TransitionMode.SHORTEST for distance, FASTEST for time)
                 max_distance_between_candidates: Maximum distance in meters (for SHORTEST mode)
                 max_time_between_candidates: Maximum time in seconds (for FASTEST mode)
-                cache_dir: Directory for caching UBODT files (default: "./ubodt_cache")
+                cache_dir: Directory for caching UBODT files (str or Path, default: "./ubodt_cache")
 
             Note:
                 Only the relevant parameter is used depending on mode. This constructor automatically generates/loads UBODT from cache based
                 on network hash, mode, and delta. UBODT is cached for reuse.
+                Accepts str or pathlib.Path for cache_dir.
         )pbdoc")
         .def("match", &FastMapMatch::pymatch_trajectory,
              py::arg("trajectory"),
