@@ -585,6 +585,68 @@ class TestReversedGeometry:
         print(f"  Offset range: {edge.points[0].edge_offset:.1f} to {edge.points[-1].edge_offset:.1f}")
 
 
+class TestTimeInterpolationEdgeCases:
+    """Test time interpolation with potential divide-by-zero edge cases."""
+
+    def test_stationary_trajectory_time_interpolation(self):
+        """Test time interpolation when GPS points are at the exact same location."""
+        network = Network()
+        network.add_edge(1, source=1, target=2, geom=[(0, 0), (100, 0)], speed=50)
+        network.finalize()
+
+        matcher = FastMapMatch(
+            network,
+            TransitionMode.SHORTEST,
+            max_distance_between_candidates=1000,
+            cache_dir=".cache/test_stationary_time",
+        )
+        # Two identical GPS points with different timestamps
+        t = Trajectory.from_xyt_tuples([(50, 0, 100), (50, 0, 200)])
+        result = matcher.match(t, max_candidates=4, candidate_search_radius=50, gps_error=50)
+
+        assert len(result.subtrajectories) == 1
+        sub = result.subtrajectories[0]
+        assert sub.error_code == MatchErrorCode.SUCCESS
+
+        # Check that timestamps are NOT nan
+        import math
+
+        for segment in sub.segments:
+            for edge in segment.edges:
+                for point in edge.points:
+                    assert not math.isnan(point.t), f"Point at ({point.x}, {point.y}) has NaN timestamp"
+                    assert point.t >= 100.0 and point.t <= 200.0
+
+    def test_zero_speed_segment_time_interpolation(self):
+        """Test time interpolation when edge speed is very low or distance is zero."""
+        network = Network()
+        # Edge with very low distance
+        network.add_edge(1, source=1, target=2, geom=[(0, 0), (0.000001, 0)], speed=50)
+        network.finalize()
+
+        matcher = FastMapMatch(
+            network,
+            TransitionMode.FASTEST,
+            max_time_between_candidates=1000,
+            cache_dir=".cache/test_zero_dist_time",
+        )
+        # GPS points far outside the tiny edge, but will snap to it
+        t = Trajectory.from_xyt_tuples([(10, 0, 10), (20, 0, 20)])
+        result = matcher.match(t, max_candidates=4, candidate_search_radius=50, gps_error=50, reference_speed=50)
+
+        assert len(result.subtrajectories) == 1
+        sub = result.subtrajectories[0]
+        assert sub.error_code == MatchErrorCode.SUCCESS
+
+        # Check that timestamps are NOT nan
+        import math
+
+        for segment in sub.segments:
+            for edge in segment.edges:
+                for point in edge.points:
+                    assert not math.isnan(point.t), f"Point at ({point.x}, {point.y}) has NaN timestamp"
+
+
 if __name__ == "__main__":
     # Allow running without pytest
     print("Running tests...")
