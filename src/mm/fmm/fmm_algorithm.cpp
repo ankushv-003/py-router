@@ -764,7 +764,14 @@ std::vector<PyMatchSegment> FastMapMatch::build_py_segments(const MatchedCandida
                         else
                         {
                             cumulative_expected_time += point.d / point.speed;
-                            point.t = t0 + cumulative_expected_time / total_expected_time * (t1 - t0);
+                            if (total_expected_time > 0)
+                            {
+                                point.t = t0 + (cumulative_expected_time / total_expected_time) * (t1 - t0);
+                            }
+                            else
+                            {
+                                point.t = t0;
+                            }
                         }
                     }
                 }
@@ -797,7 +804,14 @@ std::vector<PyMatchSegment> FastMapMatch::build_py_segments(const MatchedCandida
                         else
                         {
                             cumulative_segment_distance += point.d;
-                            point.t = t0 + (cumulative_segment_distance / total_segment_distance) * (t1 - t0);
+                            if (total_segment_distance > 0)
+                            {
+                                point.t = t0 + (cumulative_segment_distance / total_segment_distance) * (t1 - t0);
+                            }
+                            else
+                            {
+                                point.t = t0;
+                            }
                         }
                     }
                 }
