@@ -120,7 +120,9 @@ namespace FASTMM
       double t; //**< Timestamp or time value, -1 if unknown */
       double perpendicular_distance_to_matched_geometry;
       double offset_from_start_of_edge;
+      int trajectory_index;       //**< 1-based trajectory point index for trajectory observation points, 0 for interpolated points */
     };
+
     struct PyMatchSegment
     {
       PyMatchCandidate p0;

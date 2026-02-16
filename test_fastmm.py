@@ -8,11 +8,16 @@ Or: python test_py
 import sys
 from pathlib import Path
 
-# For running without installation
-sys.path.insert(0, "build/python/pybind11/Release")
-
 import pytest
-from fastmm import FastMapMatch, MatchErrorCode, Network, NetworkGraph, Trajectory, TransitionMode
+
+try:
+    from fastmm import FastMapMatch, MatchErrorCode, Network, NetworkGraph, Trajectory, TransitionMode
+except ImportError:
+    # Fallback for local in-tree runs without installing wheel
+    build_path = Path("build/python/pybind11/Release")
+    if build_path.exists():
+        sys.path.insert(0, str(build_path))
+    from fastmm import FastMapMatch, MatchErrorCode, Network, NetworkGraph, Trajectory, TransitionMode
 
 
 class TestNetworkBasics:
@@ -290,6 +295,35 @@ class TestMatchResult:
             for edge in segment.edges:
                 assert hasattr(edge, "edge_id")
                 assert hasattr(edge, "points")
+
+    def test_match_candidate_has_trajectory_index(self):
+        """Test that MatchCandidate exposes 1-based trajectory_index for trajectory observation points."""
+        network = Network()
+        network.add_edge(1, source=1, target=2, geom=[(0, 0), (100, 0)], speed=50)
+        network.finalize()
+
+        matcher = FastMapMatch(
+            network,
+            TransitionMode.SHORTEST,
+            max_distance_between_candidates=1000,
+            cache_dir=".cache/test_match_candidate_has_trajectory_index",
+        )
+        t = Trajectory.from_xy_tuples([(10, 0), (50, 0), (90, 0)])
+        result = matcher.match(t, max_candidates=4, candidate_search_radius=50, gps_error=50)
+        assert len(result.subtrajectories) == 1
+
+        sub = result.subtrajectories[0]
+        assert sub.error_code == MatchErrorCode.SUCCESS
+
+        observation_indices = []
+        for segment in sub.segments:
+            assert hasattr(segment.p0, "trajectory_index")
+            assert hasattr(segment.p1, "trajectory_index")
+            assert segment.p1.trajectory_index == segment.p0.trajectory_index + 1
+            observation_indices.append(segment.p0.trajectory_index)
+        observation_indices.append(segment.p1.trajectory_index)
+
+        assert observation_indices == [0, 1, 2]
 
 
 class TestSplitMatching:
@@ -614,7 +648,9 @@ class TestTimeInterpolationEdgeCases:
         for segment in sub.segments:
             for edge in segment.edges:
                 for point in edge.points:
-                    assert not math.isnan(point.t), f"Point at ({point.x}, {point.y}) has NaN timestamp"
+                    assert point.t is not None and not math.isnan(point.t), (
+                        f"Point at ({point.x}, {point.y}) has NaN timestamp"
+                    )
                     assert point.t >= 100.0 and point.t <= 200.0
 
     def test_zero_speed_segment_time_interpolation(self):
@@ -644,7 +680,9 @@ class TestTimeInterpolationEdgeCases:
         for segment in sub.segments:
             for edge in segment.edges:
                 for point in edge.points:
-                    assert not math.isnan(point.t), f"Point at ({point.x}, {point.y}) has NaN timestamp"
+                    assert point.t is not None and not math.isnan(point.t), (
+                        f"Point at ({point.x}, {point.y}) has NaN timestamp"
+                    )
 
 
 if __name__ == "__main__":
