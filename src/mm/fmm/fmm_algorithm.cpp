@@ -636,7 +636,8 @@ std::vector<PyMatchSegment> FastMapMatch::build_py_segments(const MatchedCandida
             boost::geometry::get<1>(mc0.c.point),
             t0,
             mc0.c.dist,
-            mc0.c.offset};
+            mc0.c.offset,
+            traj_idx_0 };
 
         const double t1 = trajectory.has_timestamps() ? trajectory.timestamps[traj_idx_1] : -1.0;
         const PyMatchCandidate end_candidate = {
@@ -644,7 +645,8 @@ std::vector<PyMatchSegment> FastMapMatch::build_py_segments(const MatchedCandida
             boost::geometry::get<1>(mc1.c.point),
             t1,
             mc1.c.dist,
-            mc1.c.offset};
+            mc1.c.offset,
+            traj_idx_1};
 
         PyMatchSegment segment = {start_candidate, end_candidate, {}};
 

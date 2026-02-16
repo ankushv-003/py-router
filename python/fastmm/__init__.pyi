@@ -22,4 +22,4 @@ INDEX_OUT_OF_BOUNDS_END: MatchErrorCode  # value = <MatchErrorCode.INDEX_OUT_OF_
 SHORTEST: TransitionMode  # value = <TransitionMode.SHORTEST: 0>
 SUCCESS: MatchErrorCode  # value = <MatchErrorCode.SUCCESS: 0>
 UNKNOWN_ERROR: MatchErrorCode  # value = <MatchErrorCode.UNKNOWN_ERROR: 255>
-__version__: str = '0.1.3.dev23'
+__version__: str = '0.3.2.dev1'
