@@ -72,8 +72,9 @@ test-command = "python -m pytest {package}/test_fastmm.py {package}/tests/ -v"
 [tool.cibuildwheel.linux]
 # Use manylinux_2_28 (AlmaLinux 8) instead of manylinux2014 (CentOS 7 EOL)
 before-build = "yum install -y boost-devel cmake"
-# Repair wheel to bundle external dependencies, exclude libfastmmlib.so which is already in the wheel
-repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel} --exclude libfastmmlib.so"
+# Bundle external deps (boost, libgomp) into the wheel. FASTMMLIB is linked
+# statically into the fastmm extension, so there is no libfastmmlib.so to exclude.
+repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel}"
 # Use newer manylinux image
 manylinux-x86_64-image = "manylinux_2_28"
 
@@ -84,10 +85,13 @@ before-build = "brew install boost cmake libomp"
 # evaluator cannot run a piped command. cibuildwheel inherits it from the
 # ambient environment. OpenMP_ROOT is a simple substitution and stays here.
 environment = { OpenMP_ROOT = "$(brew --prefix libomp)" }
-# Same exclude strategy as Linux: libfastmmlib.dylib already lives next to
-# fastmm.so inside the wheel (installed by CMake) and the extension's RPATH is
-# @loader_path, so delocate must NOT copy it into .dylibs/ and rewrite paths.
-repair-wheel-command = "delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel} --exclude libfastmmlib.dylib"
+# Use cibuildwheel's default delocate repair (no --exclude). delocate must fully
+# process libfastmmlib.dylib: it sanitizes/strips rpaths during repair, so
+# excluding libfastmmlib leaves fastmm.so's "@rpath/libfastmmlib.dylib" reference
+# with no LC_RPATH to resolve it ("no LC_RPATH's found" at import). Letting
+# delocate handle it rewrites that reference to the bundled .dylibs copy and also
+# fixes libfastmmlib's own boost/libomp dependencies. (Linux/auditwheel below does
+# not strip rpaths, so the $ORIGIN exclude there is fine.)
 
 [tool.ruff]
 line-length = 120

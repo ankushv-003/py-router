@@ -52,10 +52,8 @@ install(TARGETS fastmm
     LIBRARY DESTINATION fastmm
     COMPONENT python)
 
-# Install FASTMMLIB shared library alongside the fastmm extension
-install(FILES $<TARGET_FILE:FASTMMLIB>
-    DESTINATION fastmm
-    COMPONENT python)
+# FASTMMLIB is a STATIC library, linked into the fastmm extension above. There is
+# no shared libfastmmlib.dylib/.so to install — the code lives inside fastmm.<ext>.
 
 # Install Python source files
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/python/fastmm/
