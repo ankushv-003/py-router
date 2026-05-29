@@ -14,7 +14,7 @@ from fastmm import (  # noqa: F401
     MatchErrorCode,
     TransitionMode,
 )
-from routingkit_ch import ContractionHierarchy, CHQuery  # noqa: F401
+from routingkit_ch import ContractionHierarchy, CHQuery, INF_WEIGHT  # noqa: F401
 
 try:
     from fastmm._version import version as __version__
@@ -40,4 +40,5 @@ __all__ = [
     # Contraction hierarchy
     "ContractionHierarchy",
     "CHQuery",
+    "INF_WEIGHT",
 ]

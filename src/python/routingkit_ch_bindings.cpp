@@ -204,13 +204,18 @@ PYBIND11_MODULE(_native, m) {
             py::arg("max_pop_count") = 500,
             "Build CH from flat edge arrays (uint32 numpy or lists). Releases GIL.")
         .def("save", &PyCH::save, py::arg("path"),
-            "Write to CHB1 flat binary file.")
+            "Write to CHB1 flat binary file.",
+            py::call_guard<py::gil_scoped_release>())
         .def_static("load", &PyCH::load, py::arg("path"),
-            "Load from CHB1 flat binary file.")
+            "Load from CHB1 flat binary file.",
+            py::call_guard<py::gil_scoped_release>())
         .def_property_readonly("node_count", &PyCH::node_count);
 
     py::class_<PyCHQuery>(m, "CHQuery")
-        .def(py::init<const PyCH &>(), py::arg("ch"))
+        // keep_alive<1,2>: pin the ContractionHierarchy for the query's lifetime.
+        // PyCHQuery::q holds a reference into PyCH::ch, so the CH must outlive it.
+        .def(py::init<const PyCH &>(), py::arg("ch"), py::keep_alive<1, 2>(),
+             "Create a query over the given CH. The CH is kept alive for the query's lifetime.")
         .def("reset",       &PyCHQuery::reset,
              py::return_value_policy::reference)
         .def("add_source",  &PyCHQuery::add_source,
@@ -218,8 +223,13 @@ PYBIND11_MODULE(_native, m) {
         .def("add_target",  &PyCHQuery::add_target,
              py::arg("node"), py::return_value_policy::reference)
         .def("run",         &PyCHQuery::run,
-             py::return_value_policy::reference)
+             py::return_value_policy::reference,
+             py::call_guard<py::gil_scoped_release>())
         .def("get_distance",  &PyCHQuery::get_distance)
-        .def("get_node_path", &PyCHQuery::get_node_path)
-        .def("get_arc_path",  &PyCHQuery::get_arc_path);
+        .def("get_node_path", &PyCHQuery::get_node_path,
+             py::call_guard<py::gil_scoped_release>())
+        .def("get_arc_path",  &PyCHQuery::get_arc_path,
+             py::call_guard<py::gil_scoped_release>());
+
+    m.attr("INF_WEIGHT") = py::int_(RoutingKit::inf_weight);
 }

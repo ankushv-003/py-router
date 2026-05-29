@@ -24,9 +24,6 @@ set(FASTMM_SRC ${PROJECT_SOURCE_DIR}/python/pybind11/fastmm_bindings.cpp)
 # Build the Python extension with pybind11 helper to ensure correct Python linkage
 pybind11_add_module(fastmm MODULE ${FASTMM_SRC})
 set_target_properties(fastmm PROPERTIES PREFIX "" OUTPUT_NAME "fastmm")
-if (WIN32)
-  set_target_properties(fastmm PROPERTIES SUFFIX ".pyd")
-endif()
 target_link_libraries(fastmm PRIVATE pybind11::pybind11 Python3::Module)
 
 # Link to core FASTMM library and Python
@@ -49,8 +46,8 @@ elseif(APPLE)
     )
 endif()
 
-# Install Python extension (.pyd) - MODULE libraries use LIBRARY destination even on Windows
-message(STATUS "Configuring install for fastmm.pyd")
+# Install Python extension - MODULE libraries use the LIBRARY destination
+message(STATUS "Configuring install for fastmm extension")
 install(TARGETS fastmm
     LIBRARY DESTINATION fastmm
     COMPONENT python)
@@ -64,12 +61,19 @@ install(FILES $<TARGET_FILE:FASTMMLIB>
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/python/fastmm/
     DESTINATION fastmm
     COMPONENT python
-    FILES_MATCHING PATTERN "*.py"
+    FILES_MATCHING
+        PATTERN "*.py"
+        PATTERN "*.pyi"
     PATTERN "__pycache__" EXCLUDE
     PATTERN "*.egg-info" EXCLUDE)
 
+# fastmm py.typed marker (lives at python/py.typed, ship as fastmm/py.typed)
+install(FILES ${PROJECT_SOURCE_DIR}/python/py.typed
+    DESTINATION fastmm
+    COMPONENT python)
+
 # --- routingkit_ch extension ---
-file(GLOB RK_SRC ${PROJECT_SOURCE_DIR}/third_party/routingkit/src/*.cpp)
+file(GLOB RK_SRC CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/third_party/routingkit/src/*.cpp)
 
 pybind11_add_module(routingkit_ch_native MODULE
   ${PROJECT_SOURCE_DIR}/src/python/routingkit_ch_bindings.cpp
@@ -112,5 +116,15 @@ install(DIRECTORY ${PROJECT_SOURCE_DIR}/python/routingkit_ch/
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/python/ch_router/
     DESTINATION ch_router
     COMPONENT python
-    FILES_MATCHING PATTERN "*.py"
+    FILES_MATCHING
+        PATTERN "*.py"
+        PATTERN "*.pyi"
+        PATTERN "py.typed"
     PATTERN "__pycache__" EXCLUDE)
+
+# Ship RoutingKit's BSD-3 LICENSE next to the code that uses it, so the notice
+# travels with the wheel (BSD-3 requires retaining it in redistributions).
+install(FILES ${PROJECT_SOURCE_DIR}/third_party/routingkit/LICENSE
+    DESTINATION routingkit_ch
+    RENAME LICENSE.RoutingKit
+    COMPONENT python)
