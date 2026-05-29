@@ -103,3 +103,6 @@ cache
 *.whl
 dist
 wheelhouse/
+# Local planning / agent artifacts
+plan.md
+.claude/
