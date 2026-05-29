@@ -121,3 +121,10 @@ install(DIRECTORY ${PROJECT_SOURCE_DIR}/python/ch_router/
         PATTERN "*.pyi"
         PATTERN "py.typed"
     PATTERN "__pycache__" EXCLUDE)
+
+# Ship RoutingKit's BSD-3 LICENSE next to the code that uses it, so the notice
+# travels with the wheel (BSD-3 requires retaining it in redistributions).
+install(FILES ${PROJECT_SOURCE_DIR}/third_party/routingkit/LICENSE
+    DESTINATION routingkit_ch
+    RENAME LICENSE.RoutingKit
+    COMPONENT python)

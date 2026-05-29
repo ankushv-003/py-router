@@ -8,10 +8,10 @@ Source: [ankushv-003/ch-router](https://github.com/ankushv-003/ch-router). This 
 
 - Include Python helper classes for automatic trajectory splitting and time interpolation for the match.
 - Remove GDAL/OGR dependencies - networks are created programmatically from Python
-- Be buildable on Windows/Linux/Mac with modern tooling
+- Be buildable on Linux/macOS with modern tooling
 - Focus on Python packaging with distributable wheels
 - Remove STMatch - we'll focus on FMM for now
-- Automated windows, linux, and macOS wheel builds
+- Automated Linux and macOS wheel builds
 
 ## TODO
 
@@ -199,10 +199,22 @@ You can run the tests with:
 pytest .
 ```
 
-You can create stubs with:
+Type stubs (`.pyi`) for the compiled extensions are hand-maintained under
+`python/fastmm/` and `python/routingkit_ch/`. Update them by hand when the
+bindings change; each stub notes this in its header.
 
-```bash
-python ./generate_stubs_for_wheel.py ./python/fastmm/ ./python/fastmm/
-```
+## Third-Party Licenses
 
-For now, this is better than doing it in a CI/CD pipeline as Windows is painful.
+This package vendors source from the following projects under `third_party/`:
+
+- **[RoutingKit](https://github.com/RoutingKit/RoutingKit)** — BSD-3-Clause.
+  Source under `third_party/routingkit/` with the original `LICENSE` preserved
+  and shipped inside the wheel (`routingkit_ch/LICENSE.RoutingKit`). Compiled
+  into the `routingkit_ch._native` extension.
+- **[spdlog](https://github.com/gabime/spdlog)** — MIT. Headers under
+  `third_party/spdlog/`; used for logging in the C++ core.
+- **[FiboHeap](https://github.com/beniz/fiboheap)** — **LGPL-3.0**. Header-only,
+  under `third_party/fiboheap/` with its `LICENSE` preserved; used in the
+  routing core. Note the LGPL terms when redistributing.
+
+See each project's directory under `third_party/` for the full license text.

@@ -1,0 +1,25 @@
+Upstream: https://github.com/RoutingKit/RoutingKit
+Vendored:  subset (Contraction Hierarchy only) — the files under include/ and
+           src/ are a subset of upstream master, enough to build and query a
+           ContractionHierarchy. OSM import, nested dissection, customizable
+           CH, GeoPositionToNode, etc. are intentionally NOT vendored.
+
+No local modifications are known. If you edit a vendored file, record it in the
+"Modifications" section below so future syncs don't silently clobber it.
+
+To resync against upstream:
+  1. Pick an upstream commit and record its hash below.
+  2. Copy the kept files (see list) from upstream include/routingkit and src.
+  3. Leave LICENSE in place.
+  4. Rebuild and run tests/test_routingkit_ch.py.
+
+Upstream commit: (unknown — initial vendor predates this record; please fill in
+                  the next time the vendored sources are synced)
+
+Files vendored (relative to third_party/routingkit/):
+  LICENSE
+  include/routingkit/*.h   (CH + supporting headers as of vendor time)
+  src/*.cpp                (CH + supporting sources as of vendor time)
+
+Modifications from upstream:
+  None recorded.
