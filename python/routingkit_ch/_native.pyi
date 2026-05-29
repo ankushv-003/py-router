@@ -1,6 +1,8 @@
 from __future__ import annotations
 from numpy.typing import ArrayLike
 
+INF_WEIGHT: int
+
 class ContractionHierarchy:
     @staticmethod
     def build(
