@@ -79,7 +79,7 @@ manylinux-x86_64-image = "manylinux_2_28"
 
 [tool.cibuildwheel.macos]
 before-build = "brew install boost cmake libomp"
-environment = { OpenMP_ROOT = "$(brew --prefix libomp)", MACOSX_DEPLOYMENT_TARGET = "11.0" }
+environment = { OpenMP_ROOT = "$(brew --prefix libomp)", MACOSX_DEPLOYMENT_TARGET = "15.0" }
 # Same exclude strategy as Linux: libfastmmlib.dylib already lives next to
 # fastmm.so inside the wheel (installed by CMake) and the extension's RPATH is
 # @loader_path, so delocate must NOT copy it into .dylibs/ and rewrite paths.
