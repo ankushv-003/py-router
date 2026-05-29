@@ -60,6 +60,16 @@ else()
   message(FATAL_ERROR "Boost Not Found!")
 endif (Boost_FOUND)
 
+# Boost::geometry is header-only and is used across the OBJECT libraries (CORE,
+# NETWORK, ...), which compile independently and only feed their objects into
+# FASTMMLIB. Linking Boost to FASTMMLIB alone does NOT give those object
+# libraries Boost's include path, so add it for every target here. (Only
+# FASTMMLIB actually links Boost::serialization — see target_link_libraries
+# below.) Without this, builds fail with "boost/geometry.hpp file not found"
+# anywhere Boost's headers are not already on the compiler's default search
+# path (e.g. brew's /opt/homebrew/include on CI, vs conda's auto-searched include).
+include_directories(${Boost_INCLUDE_DIRS})
+
 
 find_package(OpenMP REQUIRED)
 if(OPENMP_FOUND)
