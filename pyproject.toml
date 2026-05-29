@@ -79,7 +79,12 @@ manylinux-x86_64-image = "manylinux_2_28"
 
 [tool.cibuildwheel.macos]
 before-build = "brew install boost cmake libomp"
-environment = { OpenMP_ROOT = "$(brew --prefix libomp)", MACOSX_DEPLOYMENT_TARGET = "15.0" }
+# Track the runner's macOS major version automatically. Homebrew builds its
+# bottles (boost, libomp) for the host OS, so their minimum-target equals the
+# runner's major version; deriving the deployment target from sw_vers keeps the
+# wheel's floor in lockstep with the bundled dylibs and avoids delocate's
+# "dependencies do not satisfy target" error when GitHub bumps macos-latest.
+environment = { OpenMP_ROOT = "$(brew --prefix libomp)", MACOSX_DEPLOYMENT_TARGET = "$(sw_vers -productVersion | cut -d. -f1).0" }
 # Same exclude strategy as Linux: libfastmmlib.dylib already lives next to
 # fastmm.so inside the wheel (installed by CMake) and the extension's RPATH is
 # @loader_path, so delocate must NOT copy it into .dylibs/ and rewrite paths.
