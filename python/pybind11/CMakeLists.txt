@@ -64,9 +64,16 @@ install(FILES $<TARGET_FILE:FASTMMLIB>
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/python/fastmm/
     DESTINATION fastmm
     COMPONENT python
-    FILES_MATCHING PATTERN "*.py"
+    FILES_MATCHING
+        PATTERN "*.py"
+        PATTERN "*.pyi"
     PATTERN "__pycache__" EXCLUDE
     PATTERN "*.egg-info" EXCLUDE)
+
+# fastmm py.typed marker (lives at python/py.typed, ship as fastmm/py.typed)
+install(FILES ${PROJECT_SOURCE_DIR}/python/py.typed
+    DESTINATION fastmm
+    COMPONENT python)
 
 # --- routingkit_ch extension ---
 file(GLOB RK_SRC ${PROJECT_SOURCE_DIR}/third_party/routingkit/src/*.cpp)
@@ -112,5 +119,8 @@ install(DIRECTORY ${PROJECT_SOURCE_DIR}/python/routingkit_ch/
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/python/ch_router/
     DESTINATION ch_router
     COMPONENT python
-    FILES_MATCHING PATTERN "*.py"
+    FILES_MATCHING
+        PATTERN "*.py"
+        PATTERN "*.pyi"
+        PATTERN "py.typed"
     PATTERN "__pycache__" EXCLUDE)
