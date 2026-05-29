@@ -1,3 +1,4 @@
+# Hand-maintained type stubs. Update by hand when bindings change.
 from __future__ import annotations
 from numpy.typing import ArrayLike
 

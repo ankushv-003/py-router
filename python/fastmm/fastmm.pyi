@@ -1,6 +1,7 @@
 """
 Fast Map Matching (FASTMM) Python bindings via pybind11
 """
+# Hand-maintained type stubs. Update by hand when bindings change.
 from __future__ import annotations
 import typing
 __all__: list[str] = ['CANDIDATES_NOT_FOUND', 'DISCONNECTED_LAYERS', 'FASTEST', 'FastMapMatch', 'INDEX_OUT_OF_BOUNDS', 'INDEX_OUT_OF_BOUNDS_END', 'MatchCandidate', 'MatchErrorCode', 'MatchPoint', 'MatchSegment', 'MatchSegmentEdge', 'Network', 'NetworkGraph', 'SHORTEST', 'SUCCESS', 'SplitMatchResult', 'SubTrajectory', 'Trajectory', 'TransitionMode', 'UNKNOWN_ERROR']
@@ -30,7 +31,7 @@ class FastMapMatch:
                         on network hash, mode, and delta. UBODT is cached for reuse.
                         Accepts str or pathlib.Path for cache_dir.
         """
-    def match(self, trajectory: Trajectory, max_candidates: int = 8, candidate_search_radius: float, gps_error: float, reverse_tolerance: float = 0.0, reference_speed: float | None = None) -> SplitMatchResult:
+    def match(self, trajectory: Trajectory, max_candidates: int = 8, *, candidate_search_radius: float, gps_error: float, reverse_tolerance: float = 0.0, reference_speed: float | None = None) -> SplitMatchResult:
         """
                     Match a GPS trajectory with automatic splitting on failures.
         
