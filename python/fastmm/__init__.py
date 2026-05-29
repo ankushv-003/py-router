@@ -17,9 +17,6 @@ __all__ = [
     "UBODT",
     "UBODTGenAlgorithm",
     "Trajectory",
-    # Geometry classes
-    "Point",
-    "LineString",
     # Result classes
     "MatchSegment",
     "MatchCandidate",
@@ -30,6 +27,4 @@ __all__ = [
     "MatchErrorCode",
     # Enums
     "TransitionMode",
-    # Python helpers
-    "MapMatcher",
 ]

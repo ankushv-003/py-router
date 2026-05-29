@@ -77,6 +77,20 @@ namespace FASTMM
                    const std::string &cache_dir = "./ubodt_cache");
 
       /**
+       * Constructor that takes a pre-loaded UBODT instead of managing one via cache.
+       * Useful for sharing a single UBODT across multiple matchers or for fully
+       * controlling UBODT lifecycle from Python.
+       * @param network road network (must be finalized)
+       * @param mode transition mode (SHORTEST or FASTEST) - must match the UBODT's mode
+       * @param ubodt pre-loaded UBODT (network hash and mode are validated against the network)
+       * @throws std::invalid_argument if network is not finalized or has no edges
+       * @throws std::runtime_error if the UBODT does not match the network
+       */
+      FastMapMatch(const NETWORK::Network &network,
+                   TransitionMode mode,
+                   std::shared_ptr<UBODT> ubodt);
+
+      /**
        * Match a trajectory with automatic splitting on failures
        * Performs candidate search once and reuses it for all sub-trajectories
        * @param  trajectory   input trajectory data

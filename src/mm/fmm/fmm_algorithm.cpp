@@ -146,6 +146,57 @@ FastMapMatch::FastMapMatch(const Network &network,
     SPDLOG_INFO("FastMapMatch initialized successfully.");
 }
 
+FastMapMatch::FastMapMatch(const Network &network,
+                           TransitionMode mode,
+                           std::shared_ptr<UBODT> ubodt)
+    : network_(network), graph_(network, mode), ubodt_(std::move(ubodt)), mode_(mode)
+{
+    if (!network_.is_finalized())
+    {
+        throw std::invalid_argument("FastMapMatch: Network must be finalized (call finalize() first)");
+    }
+    if (network_.get_edge_count() == 0)
+    {
+        throw std::invalid_argument("FastMapMatch: Network contains no edges");
+    }
+    if (!ubodt_)
+    {
+        throw std::invalid_argument("FastMapMatch: ubodt must not be null");
+    }
+
+    std::string network_hash = network_.compute_hash();
+    std::string loaded_hash = ubodt_->get_network_hash();
+    TransitionMode loaded_mode = ubodt_->get_mode();
+    int loaded_num_vertices = ubodt_->get_num_vertices();
+    long long loaded_num_rows = ubodt_->get_num_rows();
+
+    if (loaded_num_rows == 0 || loaded_num_vertices == 0)
+    {
+        throw std::runtime_error("Provided UBODT is empty!");
+    }
+    if (loaded_num_vertices < network_.get_node_count())
+    {
+        throw std::runtime_error("Provided UBODT has fewer vertices than network nodes!");
+    }
+    if (loaded_mode != mode)
+    {
+        throw std::runtime_error(
+            "UBODT mode mismatch! Expected " +
+            std::string(mode == TransitionMode::SHORTEST ? "SHORTEST" : "FASTEST") +
+            " but UBODT was generated with " +
+            std::string(loaded_mode == TransitionMode::SHORTEST ? "SHORTEST" : "FASTEST"));
+    }
+    if (loaded_hash.empty() || loaded_hash != network_hash)
+    {
+        throw std::runtime_error(
+            "UBODT network hash mismatch! Expected " + network_hash +
+            " but UBODT has " + loaded_hash +
+            ". The network has changed since the UBODT was generated.");
+    }
+
+    SPDLOG_INFO("FastMapMatch initialized with pre-loaded UBODT.");
+}
+
 FastMapMatchConfig::FastMapMatchConfig(int max_candidates,
                                        double candidate_search_radius,
                                        double gps_error,

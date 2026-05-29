@@ -37,8 +37,6 @@ def generate_init_pyi(fastmm_pyi_path, target_dir):
 
     init_pyi.append(")")
     init_pyi.append("")
-    init_pyi.append("from .matcher import MapMatcher as MapMatcher")
-    init_pyi.append("")
     init_pyi.append("__version__: str")
     init_pyi.append("")
 
@@ -46,7 +44,6 @@ def generate_init_pyi(fastmm_pyi_path, target_dir):
     init_pyi.append("__all__ = [")
     for symbol in symbols:
         init_pyi.append(f'    "{symbol}",')
-    init_pyi.append('    "MapMatcher",')
     init_pyi.append("]")
     init_pyi.append("")
 

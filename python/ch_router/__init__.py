@@ -5,8 +5,6 @@ from fastmm import (  # noqa: F401
     UBODT,
     UBODTGenAlgorithm,
     Trajectory,
-    Point,
-    LineString,
     MatchSegment,
     MatchCandidate,
     MatchPoint,
@@ -15,7 +13,6 @@ from fastmm import (  # noqa: F401
     SplitMatchResult,
     MatchErrorCode,
     TransitionMode,
-    MapMatcher,
 )
 from routingkit_ch import ContractionHierarchy, CHQuery  # noqa: F401
 
@@ -32,8 +29,6 @@ __all__ = [
     "UBODT",
     "UBODTGenAlgorithm",
     "Trajectory",
-    "Point",
-    "LineString",
     "MatchSegment",
     "MatchCandidate",
     "MatchPoint",
@@ -42,7 +37,6 @@ __all__ = [
     "SplitMatchResult",
     "MatchErrorCode",
     "TransitionMode",
-    "MapMatcher",
     # Contraction hierarchy
     "ContractionHierarchy",
     "CHQuery",

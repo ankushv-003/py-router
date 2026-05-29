@@ -382,6 +382,89 @@ PYBIND11_MODULE(fastmm, m)
                 Trajectory instance without time information
         )pbdoc");
 
+    // UBODT class - Upper-Bounded Origin-Destination Table.
+    // Held by std::shared_ptr because FastMapMatch and UBODT::read_ubodt return shared_ptr.
+    py::class_<UBODT, std::shared_ptr<UBODT>>(m, "UBODT", R"pbdoc(
+        Upper-Bounded Origin-Destination Table used by FastMapMatch.
+
+        A precomputed routing table that stores shortest (or fastest) paths
+        up to a cost upper bound (delta) between all node pairs in the network.
+        Generate one with UBODTGenAlgorithm.generate_ubodt() and load with
+        UBODT.read_ubodt(). Pass an instance to FastMapMatch to skip the
+        cache directory entirely.
+    )pbdoc")
+        .def_static("read_ubodt",
+                    [](const std::string &filename, int progress_step)
+                    { return UBODT::read_ubodt(filename, progress_step); },
+                    py::arg("filename"),
+                    py::arg("progress_step") = 100000,
+                    R"pbdoc(
+            Read a UBODT from a binary file produced by UBODTGenAlgorithm.
+
+            Args:
+                filename: Path to the .bin UBODT file.
+                progress_step: Print progress every N rows (0 disables, default 100000).
+
+            Returns:
+                A UBODT instance.
+        )pbdoc")
+        .def_property_readonly("delta", &UBODT::get_delta,
+                               "Upper bound (delta) the UBODT was generated with")
+        .def_property_readonly("network_hash", &UBODT::get_network_hash,
+                               "Hash of the network this UBODT was generated from (empty for legacy files)")
+        .def_property_readonly("mode", &UBODT::get_mode,
+                               "TransitionMode this UBODT was generated with")
+        .def_property_readonly("num_vertices", &UBODT::get_num_vertices,
+                               "Number of vertices used for perfect hashing")
+        .def_property_readonly("num_rows", &UBODT::get_num_rows,
+                               "Number of records stored in the table");
+
+    // UBODTGenAlgorithm class - generates a UBODT for a given network and mode.
+    py::class_<UBODTGenAlgorithm>(m, "UBODTGenAlgorithm", R"pbdoc(
+        Generator for Upper-Bounded Origin-Destination Tables.
+
+        Precomputes a UBODT for a given Network/NetworkGraph and writes it to a
+        binary file. The resulting file can be loaded with UBODT.read_ubodt().
+    )pbdoc")
+        .def(py::init<const Network &, const NetworkGraph &, TransitionMode>(),
+             py::arg("network"),
+             py::arg("graph"),
+             py::arg("mode"),
+             py::keep_alive<1, 2>(),
+             py::keep_alive<1, 3>(),
+             R"pbdoc(
+            Create a UBODTGenAlgorithm.
+
+            Args:
+                network: Finalized road network.
+                graph: NetworkGraph built from the same network and mode.
+                mode: TransitionMode.SHORTEST or TransitionMode.FASTEST.
+        )pbdoc")
+        .def("generate_ubodt", &UBODTGenAlgorithm::generate_ubodt,
+             py::arg("filename"),
+             py::arg("delta"),
+             py::arg("network_hash") = std::string(""),
+             R"pbdoc(
+            Generate the UBODT and write it to a binary file.
+
+            Args:
+                filename: Output file path.
+                delta: Cost upper bound (distance for SHORTEST, time for FASTEST).
+                network_hash: Optional network hash embedded in the file for validation.
+        )pbdoc")
+        .def("precompute_ubodt_omp", &UBODTGenAlgorithm::precompute_ubodt_omp,
+             py::arg("filename"),
+             py::arg("delta"),
+             py::arg("network_hash"),
+             R"pbdoc(
+            Generate the UBODT in parallel using OpenMP and write it to a binary file.
+
+            Args:
+                filename: Output file path.
+                delta: Cost upper bound (distance for SHORTEST, time for FASTEST).
+                network_hash: Network hash embedded in the file for validation.
+        )pbdoc");
+
     // FastMapMatch class
     py::class_<FastMapMatch>(m, "FastMapMatch", R"pbdoc(
         Fast map matching algorithm using Hidden Markov Model with UBODT optimization.
@@ -423,6 +506,26 @@ PYBIND11_MODULE(fastmm, m)
                 Only the relevant parameter is used depending on mode. This constructor automatically generates/loads UBODT from cache based
                 on network hash, mode, and delta. UBODT is cached for reuse.
                 Accepts str or pathlib.Path for cache_dir.
+        )pbdoc")
+        .def(py::init<const Network &, TransitionMode, std::shared_ptr<UBODT>>(),
+             py::arg("network"),
+             py::arg("mode"),
+             py::arg("ubodt"),
+             R"pbdoc(
+            Create a FastMapMatch instance from a pre-loaded UBODT.
+
+            Use this when you want to manage UBODT lifecycle yourself - e.g. share
+            one UBODT across multiple FastMapMatch instances, load from a custom
+            path, or avoid the on-disk cache directory entirely.
+
+            Args:
+                network: Road network with spatial index built (call finalize() first).
+                mode: Routing mode - must match the mode the UBODT was generated with.
+                ubodt: A UBODT instance (typically from UBODT.read_ubodt(...)).
+
+            Raises:
+                RuntimeError: If the UBODT's network hash, mode, or vertex count
+                    does not match the provided network.
         )pbdoc")
         .def("match", &FastMapMatch::pymatch_trajectory,
              py::arg("trajectory"),
