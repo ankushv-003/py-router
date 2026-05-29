@@ -23,7 +23,7 @@ jobs:
 
       - name: Cache Docker images (Linux)
         if: matrix.os == 'ubuntu-latest'
-        uses: ScribeMD/docker-cache@0.5.0
+        uses: ScribeMD/docker-cache@fb28c93772363301b8d0a6072ce850224b73f74e  # v0.5.0
         with:
           key: docker-${{ runner.os }}-manylinux
 
