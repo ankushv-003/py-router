@@ -76,7 +76,7 @@ install(FILES ${PROJECT_SOURCE_DIR}/python/py.typed
     COMPONENT python)
 
 # --- routingkit_ch extension ---
-file(GLOB RK_SRC ${PROJECT_SOURCE_DIR}/third_party/routingkit/src/*.cpp)
+file(GLOB RK_SRC CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/third_party/routingkit/src/*.cpp)
 
 pybind11_add_module(routingkit_ch_native MODULE
   ${PROJECT_SOURCE_DIR}/src/python/routingkit_ch_bindings.cpp

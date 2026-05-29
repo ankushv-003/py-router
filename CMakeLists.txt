@@ -42,6 +42,13 @@ if (MSVC)
 else()
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
 endif()
+
+# Boost 1.82's qvm headers (pulled in by boost::geometry) use the `.template`
+# disambiguator in a way that Clang 18 / Apple Clang 17 reject by default.
+# Suppress just that diagnostic on Clang; GCC does not have the flag.
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wno-missing-template-arg-list-after-template-kw)
+endif()
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
@@ -67,7 +74,6 @@ if (Boost_FOUND)
 else()
   message(FATAL_ERROR "Boost Not Found!")
 endif (Boost_FOUND)
-link_libraries(${Boost_LIBRARIES})
 
 
 find_package(OpenMP REQUIRED)
@@ -80,7 +86,6 @@ if(OPENMP_FOUND)
     include_directories(${OpenMP_CXX_INCLUDE_DIRS})
   endif()
 endif()
-link_libraries(${OpenMP_CXX_LIBRARIES})
 
 ### Set RPATH properties
 
@@ -100,12 +105,12 @@ ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
 
 include_directories(${FASTMM_INCLUDE_PATH})
 
-file(GLOB CoreGlob src/core/*.cpp)
-file(GLOB AlgorithmGlob src/algorithm/*.cpp)
-file(GLOB NetworkGlob src/network/*.cpp)
-file(GLOB UtilGlob src/util/*.cpp)
-file(GLOB MMGlob src/mm/*.cpp)
-file(GLOB FMMGlob src/mm/fmm/*.cpp)
+file(GLOB CoreGlob CONFIGURE_DEPENDS src/core/*.cpp)
+file(GLOB AlgorithmGlob CONFIGURE_DEPENDS src/algorithm/*.cpp)
+file(GLOB NetworkGlob CONFIGURE_DEPENDS src/network/*.cpp)
+file(GLOB UtilGlob CONFIGURE_DEPENDS src/util/*.cpp)
+file(GLOB MMGlob CONFIGURE_DEPENDS src/mm/*.cpp)
+file(GLOB FMMGlob CONFIGURE_DEPENDS src/mm/fmm/*.cpp)
 
 add_library(CORE OBJECT ${CoreGlob})
 add_library(ALGORITHM OBJECT ${AlgorithmGlob})
@@ -121,6 +126,11 @@ add_library(FASTMMLIB SHARED
   $<TARGET_OBJECTS:ALGORITHM>
   $<TARGET_OBJECTS:UTIL>
   $<TARGET_OBJECTS:NETWORK>)
+
+# Link Boost and OpenMP into FASTMMLIB only (these were previously linked
+# globally via link_libraries(), which leaked them into routingkit_ch_native
+# which uses neither). OpenMP is used only in src/mm/fmm/ubodt_gen_algorithm.cpp.
+target_link_libraries(FASTMMLIB PUBLIC ${Boost_LIBRARIES} ${OpenMP_CXX_LIBRARIES})
 
 # Set the output name to lowercase for consistency
 set_target_properties(FASTMMLIB PROPERTIES OUTPUT_NAME "fastmmlib")
