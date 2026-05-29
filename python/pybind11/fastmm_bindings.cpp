@@ -418,7 +418,13 @@ PYBIND11_MODULE(fastmm, m)
         .def_property_readonly("num_vertices", &UBODT::get_num_vertices,
                                "Number of vertices used for perfect hashing")
         .def_property_readonly("num_rows", &UBODT::get_num_rows,
-                               "Number of records stored in the table");
+                               "Number of records stored in the table")
+        .def("__repr__", [](const UBODT &u) {
+            return "<UBODT delta=" + std::to_string(u.get_delta()) +
+                   " mode=" + (u.get_mode() == TransitionMode::SHORTEST ? std::string("SHORTEST") : std::string("FASTEST")) +
+                   " rows=" + std::to_string(u.get_num_rows()) +
+                   " vertices=" + std::to_string(u.get_num_vertices()) + ">";
+        });
 
     // UBODTGenAlgorithm class - generates a UBODT for a given network and mode.
     py::class_<UBODTGenAlgorithm>(m, "UBODTGenAlgorithm", R"pbdoc(
@@ -466,7 +472,10 @@ PYBIND11_MODULE(fastmm, m)
                 delta: Cost upper bound (distance for SHORTEST, time for FASTEST).
                 network_hash: Optional network hash embedded in the file for validation.
         )pbdoc",
-             py::call_guard<py::gil_scoped_release>());
+             py::call_guard<py::gil_scoped_release>())
+        .def("__repr__", [](const UBODTGenAlgorithm &) {
+            return std::string("<UBODTGenAlgorithm>");
+        });
 
     // FastMapMatch class
     py::class_<FastMapMatch>(m, "FastMapMatch", R"pbdoc(
