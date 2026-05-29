@@ -535,6 +535,7 @@ PYBIND11_MODULE(fastmm, m)
              py::arg("reverse_tolerance") = 0.0,
              py::arg("reference_speed") = std::nullopt,
              py::return_value_policy::move,
+             py::call_guard<py::gil_scoped_release>(),
              R"pbdoc(
             Match a GPS trajectory with automatic splitting on failures.
 
