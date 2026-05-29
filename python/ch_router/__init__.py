@@ -1,0 +1,49 @@
+from fastmm import (  # noqa: F401
+    Network,
+    NetworkGraph,
+    FastMapMatch,
+    UBODT,
+    UBODTGenAlgorithm,
+    Trajectory,
+    Point,
+    LineString,
+    MatchSegment,
+    MatchCandidate,
+    MatchPoint,
+    MatchSegmentEdge,
+    SubTrajectory,
+    SplitMatchResult,
+    MatchErrorCode,
+    TransitionMode,
+    MapMatcher,
+)
+from routingkit_ch import ContractionHierarchy, CHQuery  # noqa: F401
+
+try:
+    from fastmm._version import version as __version__
+except ImportError:
+    __version__ = "unknown"
+
+__all__ = [
+    # Map matching
+    "Network",
+    "NetworkGraph",
+    "FastMapMatch",
+    "UBODT",
+    "UBODTGenAlgorithm",
+    "Trajectory",
+    "Point",
+    "LineString",
+    "MatchSegment",
+    "MatchCandidate",
+    "MatchPoint",
+    "MatchSegmentEdge",
+    "SubTrajectory",
+    "SplitMatchResult",
+    "MatchErrorCode",
+    "TransitionMode",
+    "MapMatcher",
+    # Contraction hierarchy
+    "ContractionHierarchy",
+    "CHQuery",
+]

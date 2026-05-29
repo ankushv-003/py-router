@@ -1,10 +1,10 @@
-# fastmm
+# py-fmm
 
-fastmm is a fast (C++) map-matching library for python with no dependencies, and the ability to interpolate time on the match (not just position), and also match as much as possible of the GPS trace (not just fail if a single point is wonky).
+py-fmm is a fast (C++) map-matching library for Python with no dependencies, and the ability to interpolate time on the match (not just position), and also match as much as possible of the GPS trace (not just fail if a single point is wonky).
 
 It's based on a desire to map match a lot of vehicle trace data quickly, without the infrastructure to spin up OSRM / Valhalla. (And this is probably faster as there's no IPC ... ?)
 
-It is based on <https://github.com/cyang-kth/fmm> but updated to:
+Source: [ankushv-003/ch-router](https://github.com/ankushv-003/ch-router). This is a fork of [kodonnell/fastmm](https://github.com/kodonnell/fastmm), which is itself based on <https://github.com/cyang-kth/fmm> but updated to:
 
 - Include Python helper classes for automatic trajectory splitting and time interpolation for the match.
 - Remove GDAL/OGR dependencies - networks are created programmatically from Python
@@ -24,7 +24,7 @@ It is based on <https://github.com/cyang-kth/fmm> but updated to:
 ## Installation
 
 ```bash
-pip install fastmm
+pip install ch-router
 ```
 
 ## Quick Start (Recommended)
@@ -73,6 +73,7 @@ For time-based routing you simply add a speed on all edges, and use `TransitionM
 ## Automatic Trajectory Splitting
 
 For trajectories that might have gaps or failures, `match()` automatically filters out troublesome sections, and matches everything it can. That is:
+
 - It ignores points with no nearby road candidates (e.g., in tunnels, off-network) - it just returns the map matched sections either side of the erroneous point. (You can choose to merge them yourself later if you want.)
 - If there's a break in the matching due to e.g. a very long distance between two points (data issues, teleportation etc.) then again, it'll return the map matches sections either side of this gap.
 
@@ -85,18 +86,21 @@ If your trajectory has timestamps, you often want your resulting match to includ
 The `delta` parameter (called `max_distance_between_candidates` or `max_time_between_candidates` in `MapMatcher`) controls the maximum routing cost for precomputed paths in the UBODT table:
 
 ### SHORTEST Mode (Distance-Based)
+
 - **Units**: Same as your network (typically meters)
 - **Meaning**: Maximum road network distance between GPS points
 - **Recommendation**: 2-3x your expected maximum distance between consecutive GPS points
 - **Example**: If GPS points are ~100m apart, use delta=300m
 
 ### FASTEST Mode (Time-Based)
+
 - **Units**: Seconds
 - **Meaning**: Maximum travel time between GPS points
 - **Recommendation**: 2-3x your expected maximum travel time between GPS points
 - **Example**: For 200m spacing at 50km/h expected speed: 200m ÷ (50,000m/3600s) ≈ 14.4s → use delta=40s
 
 **Trade-offs**:
+
 - **Larger delta**: Better matching quality (more routing options), but larger file size and slower generation
 - **Smaller delta**: Faster generation and smaller files, but may fail to find paths between distant GPS points
 

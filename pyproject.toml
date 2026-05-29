@@ -8,28 +8,25 @@ requires = [
 build-backend = "scikit_build_core.build"
 
 [project]
-name = "fastmm"
+name = "ch-router"
 dynamic = ["version"]
-description = "Fast Map Matching - High-performance map matching library"
+description = "Fast map matching and contraction hierarchy routing for Python"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = "MIT"
 authors = [
-    {name = "kodonnell"},
+    {name = "ankushv-003"},
 ]
-keywords = ["map-matching", "gps", "trajectory", "routing", "GIS"]
+keywords = ["map-matching", "gps", "trajectory", "routing", "GIS", "contraction-hierarchy"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
-    "Programming Language :: Python :: 3.14",
     "Programming Language :: C++",
     "Topic :: Scientific/Engineering :: GIS",
 ]
@@ -39,9 +36,9 @@ matcher = []
 dev = ["pytest", "ruff"]
 
 [project.urls]
-Homepage = "https://github.com/kodonnell/fastmm"
-Documentation = "https://github.com/kodonnell/fastmm"
-Repository = "https://github.com/kodonnell/fastmm"
+Homepage = "https://github.com/ankushv-003/ch-router"
+Documentation = "https://github.com/ankushv-003/ch-router"
+Repository = "https://github.com/ankushv-003/ch-router"
 
 [tool.scikit-build]
 # Scikit-build-core configuration for CMake integration
@@ -49,8 +46,7 @@ build.verbose = false
 build-dir = "build"  # Use persistent build directory for incremental builds
 cmake.build-type = "Release"
 install.components = ["python"]
-wheel.install-dir = "fastmm"
-wheel.packages = ["python/fastmm"]
+wheel.packages = []
 
 [tool.scikit-build.metadata.version]
 provider = "scikit_build_core.metadata.setuptools_scm"
@@ -61,33 +57,19 @@ version_scheme = "guess-next-dev"
 local_scheme = "no-local-version"
 
 [tool.cibuildwheel]
-# Build for Python 3.8-3.12
-build = "cp310-* cp311-* cp312-*"
+# Build for Python 3.10-3.13
+build = "cp310-* cp311-* cp312-* cp313-*"
 skip = "*-win32 *-musllinux_* *-manylinux_i686"
 
 # Build verbosity
 build-verbosity = 1
 
 # Install test dependencies into the test venv
-test-requires = "pytest>=8.0"
+test-requires = ["pytest>=8.0", "numpy>=1.20"]
 
 # Run tests against the installed wheel
-test-command = "python -m pytest {package} -v --import-mode=append"
+test-command = "python -m pytest {package}/test_fastmm.py {package}/tests/ -v"
 
-[tool.cibuildwheel.windows]
-# Install Boost and build dependencies before building
-before-build = "(if not exist \"C:\\vcpkg\\archives\" mkdir \"C:\\vcpkg\\archives\") && vcpkg install boost-geometry:x64-windows boost-serialization:x64-windows boost-format:x64-windows boost-uuid:x64-windows && pip install scikit-build-core setuptools-scm pybind11 delvewheel"
-
-# Set Boost paths and vcpkg toolchain for CMake
-environment = { BOOST_ROOT = "C:/vcpkg/installed/x64-windows", CMAKE_ARGS = "-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake", VCPKG_FEATURE_FLAGS = "binarycaching", VCPKG_DEFAULT_BINARY_CACHE = "C:/vcpkg/archives" }
-
-# Repair Windows wheels to bundle DLL dependencies
-# --no-dll fastmmlib.dll: Skip fastmmlib.dll (already in wheel)
-# --analyze-existing: Analyze DLLs already in wheel to find their external dependencies
-repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel} --add-path C:/vcpkg/installed/x64-windows/bin --no-dll fastmmlib.dll --analyze-existing"
-
-# Let cibuildwheel auto-detect the best generator for the VS version
-# (VS 2022 on GitHub Actions, VS 2026 on local machine)
 
 [tool.cibuildwheel.linux]
 # Use manylinux_2_28 (AlmaLinux 8) instead of manylinux2014 (CentOS 7 EOL)
@@ -99,7 +81,7 @@ manylinux-x86_64-image = "manylinux_2_28"
 
 [tool.cibuildwheel.macos]
 before-build = "brew install boost cmake libomp"
-environment = { OpenMP_ROOT = "$(brew --prefix libomp)" }
+environment = { OpenMP_ROOT = "$(brew --prefix libomp)", MACOSX_DEPLOYMENT_TARGET = "15.0" }
 
 [tool.ruff]
 line-length = 120
