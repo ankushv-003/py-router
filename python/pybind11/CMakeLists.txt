@@ -24,9 +24,6 @@ set(FASTMM_SRC ${PROJECT_SOURCE_DIR}/python/pybind11/fastmm_bindings.cpp)
 # Build the Python extension with pybind11 helper to ensure correct Python linkage
 pybind11_add_module(fastmm MODULE ${FASTMM_SRC})
 set_target_properties(fastmm PROPERTIES PREFIX "" OUTPUT_NAME "fastmm")
-if (WIN32)
-  set_target_properties(fastmm PROPERTIES SUFFIX ".pyd")
-endif()
 target_link_libraries(fastmm PRIVATE pybind11::pybind11 Python3::Module)
 
 # Link to core FASTMM library and Python
@@ -49,8 +46,8 @@ elseif(APPLE)
     )
 endif()
 
-# Install Python extension (.pyd) - MODULE libraries use LIBRARY destination even on Windows
-message(STATUS "Configuring install for fastmm.pyd")
+# Install Python extension - MODULE libraries use the LIBRARY destination
+message(STATUS "Configuring install for fastmm extension")
 install(TARGETS fastmm
     LIBRARY DESTINATION fastmm
     COMPONENT python)
