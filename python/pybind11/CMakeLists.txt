@@ -52,23 +52,65 @@ endif()
 # Install Python extension (.pyd) - MODULE libraries use LIBRARY destination even on Windows
 message(STATUS "Configuring install for fastmm.pyd")
 install(TARGETS fastmm
-    LIBRARY DESTINATION .
+    LIBRARY DESTINATION fastmm
     COMPONENT python)
 
-# Install FASTMMLIB shared library
-# RUNTIME for Windows (.dll), LIBRARY for Linux/macOS (.so/.dylib)
-message(STATUS "Configuring install for FASTMMLIB: $<TARGET_FILE:FASTMMLIB>")
-message(STATUS "FASTMMLIB will install RUNTIME to . and LIBRARY to . with component python")
-
-# Use generator expression to install the actual DLL file
+# Install FASTMMLIB shared library alongside the fastmm extension
 install(FILES $<TARGET_FILE:FASTMMLIB>
-    DESTINATION .
+    DESTINATION fastmm
     COMPONENT python)
 
 # Install Python source files
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/python/fastmm/
-    DESTINATION .
+    DESTINATION fastmm
     COMPONENT python
     FILES_MATCHING PATTERN "*.py"
     PATTERN "__pycache__" EXCLUDE
     PATTERN "*.egg-info" EXCLUDE)
+
+# --- routingkit_ch extension ---
+file(GLOB RK_SRC ${PROJECT_SOURCE_DIR}/third_party/routingkit/src/*.cpp)
+
+pybind11_add_module(routingkit_ch_native MODULE
+  ${PROJECT_SOURCE_DIR}/src/python/routingkit_ch_bindings.cpp
+  ${RK_SRC}
+)
+target_include_directories(routingkit_ch_native PRIVATE
+  ${PROJECT_SOURCE_DIR}/third_party/routingkit/include
+  ${PROJECT_SOURCE_DIR}/third_party/routingkit/src
+)
+set_target_properties(routingkit_ch_native PROPERTIES
+  OUTPUT_NAME "_native"
+  CXX_STANDARD 17
+)
+if(UNIX AND NOT APPLE)
+    set_target_properties(routingkit_ch_native PROPERTIES
+        BUILD_RPATH "$ORIGIN"
+        INSTALL_RPATH "$ORIGIN"
+    )
+elseif(APPLE)
+    set_target_properties(routingkit_ch_native PROPERTIES
+        BUILD_RPATH "@loader_path"
+        INSTALL_RPATH "@loader_path"
+    )
+endif()
+install(TARGETS routingkit_ch_native
+    LIBRARY DESTINATION routingkit_ch
+    COMPONENT python)
+
+# Install routingkit_ch Python package source files
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/python/routingkit_ch/
+    DESTINATION routingkit_ch
+    COMPONENT python
+    FILES_MATCHING
+        PATTERN "*.py"
+        PATTERN "*.pyi"
+        PATTERN "py.typed"
+    PATTERN "__pycache__" EXCLUDE)
+
+# Install ch_router top-level package (thin re-export wrapper)
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/python/ch_router/
+    DESTINATION ch_router
+    COMPONENT python
+    FILES_MATCHING PATTERN "*.py"
+    PATTERN "__pycache__" EXCLUDE)
