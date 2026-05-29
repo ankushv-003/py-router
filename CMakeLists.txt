@@ -114,7 +114,15 @@ add_library(NETWORK OBJECT ${NetworkGlob})
 add_library(MM_OBJ OBJECT ${MMGlob})
 add_library(FMM_OBJ OBJECT ${FMMGlob})
 
-add_library(FASTMMLIB SHARED
+# STATIC, not SHARED: FASTMMLIB is consumed only by the fastmm Python extension
+# (routingkit_ch_native is independent). Linking it statically folds all the FMM
+# code into fastmm.<ext>.so, so the wheel ships a single self-contained extension
+# with no libfastmmlib.dylib. That avoids a whole class of macOS packaging bugs:
+# delocate sanitizes/strips rpaths during repair (breaking an @rpath reference to
+# an in-wheel libfastmmlib) and collides when fastmm.so and libfastmmlib both pull
+# boost. With everything in fastmm.so, only boost/libomp remain external and
+# delocate/auditwheel bundle those cleanly.
+add_library(FASTMMLIB STATIC
   $<TARGET_OBJECTS:MM_OBJ>
   $<TARGET_OBJECTS:FMM_OBJ>
   $<TARGET_OBJECTS:CORE>

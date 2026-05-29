@@ -27,6 +27,16 @@ jobs:
         with:
           key: docker-${{ runner.os }}-manylinux
 
+      # Match the wheel's macOS floor to the runner's OS. Homebrew builds its
+      # boost/libomp bottles for the host OS, so their minimum target equals the
+      # runner's major version; delocate rejects a wheel whose floor is lower
+      # than its bundled dylibs. Computed here (real bash, pipes allowed) and
+      # exported so cibuildwheel inherits it -- pyproject's environment evaluator
+      # cannot run a piped command. Auto-tracks future macos-latest bumps.
+      - name: Set macOS deployment target to the runner version
+        if: matrix.os == 'macos-latest'
+        run: echo "MACOSX_DEPLOYMENT_TARGET=$(sw_vers -productVersion | cut -d. -f1).0" >> "$GITHUB_ENV"
+
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.22
         # All cibuildwheel configuration is in pyproject.toml
