@@ -1,13 +1,9 @@
 /**
  * routingkit_ch_bindings.cpp — pybind11 bindings for RoutingKit CH.
  *
- * Save/load format: CHB1 flat binary.
- * Magic "CHB1" + version u32(1) + n_nodes + rank[] + order[] +
- * Side(fwd) + Side(bwd).
- * Side = first_out[] + head[] + weight[] + bitvec + shortcut_first_arc[]
- *        + shortcut_second_arc[].
- * bitvec = u32 nbits + ceil(nbits/8) bytes packed LSB-first.
- * All integers little-endian u32. Arrays are length-prefixed (u32 count).
+ * Save/load format: RoutingKit native binary (ContractionHierarchy::save_file /
+ * load_file). Files produced here can be loaded directly by any RoutingKit
+ * application without conversion.
  */
 
 #include <routingkit/contraction_hierarchy.h>
@@ -17,9 +13,6 @@
 #include <pybind11/stl.h>
 
 #include <cstdint>
-#include <cstring>
-#include <fstream>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -32,112 +25,6 @@ static std::vector<unsigned>
 to_uvec(py::array_t<uint32_t, py::array::c_style | py::array::forcecast> a) {
     auto r = a.unchecked<1>();
     return std::vector<unsigned>(r.data(0), r.data(0) + r.shape(0));
-}
-
-// ── CHB1 writer ──────────────────────────────────────────────────────────────
-
-static void write_u32(std::ostream &f, uint32_t v) {
-    char b[4] = {char(v), char(v >> 8), char(v >> 16), char(v >> 24)};
-    f.write(b, 4);
-}
-
-static void write_vec(std::ostream &f, const std::vector<unsigned> &v) {
-    write_u32(f, uint32_t(v.size()));
-    for (unsigned x : v) write_u32(f, uint32_t(x));
-}
-
-static void write_bitvec(std::ostream &f, const BitVector &bv, uint32_t n) {
-    write_u32(f, n);
-    uint32_t nb = (n + 7) / 8;
-    std::vector<uint8_t> buf(nb, 0);
-    for (uint32_t i = 0; i < n; ++i)
-        if (bv.is_set(i)) buf[i / 8] |= uint8_t(1u << (i % 8));
-    f.write(reinterpret_cast<const char *>(buf.data()), nb);
-}
-
-static void write_side(std::ostream &f, const ContractionHierarchy::Side &s) {
-    write_vec(f, s.first_out);
-    write_vec(f, s.head);
-    write_vec(f, s.weight);
-    write_bitvec(f, s.is_shortcut_an_original_arc, uint32_t(s.head.size()));
-    write_vec(f, s.shortcut_first_arc);
-    write_vec(f, s.shortcut_second_arc);
-}
-
-static void write_chb1(const ContractionHierarchy &ch, const std::string &path) {
-    std::ofstream f(path, std::ios::binary | std::ios::trunc);
-    if (!f) throw std::runtime_error("Cannot open for write: " + path);
-    f.write("CHB1", 4);
-    write_u32(f, 1u);
-    write_u32(f, uint32_t(ch.node_count()));
-    write_vec(f, ch.rank);
-    write_vec(f, ch.order);
-    write_side(f, ch.forward);
-    write_side(f, ch.backward);
-    f.close();
-    if (!f) throw std::runtime_error("Write error on: " + path);
-}
-
-// ── CHB1 reader ──────────────────────────────────────────────────────────────
-
-static uint32_t read_u32(std::istream &f) {
-    uint8_t b[4];
-    f.read(reinterpret_cast<char *>(b), 4);
-    if (!f) throw std::runtime_error("Truncated CHB1 file");
-    return uint32_t(b[0]) | (uint32_t(b[1]) << 8) |
-           (uint32_t(b[2]) << 16) | (uint32_t(b[3]) << 24);
-}
-
-static std::vector<unsigned> read_vec(std::istream &f) {
-    uint32_t n = read_u32(f);
-    std::vector<unsigned> v(n);
-    for (uint32_t i = 0; i < n; ++i) v[i] = read_u32(f);
-    return v;
-}
-
-static BitVector read_bitvec(std::istream &f) {
-    uint32_t nbits = read_u32(f);
-    uint32_t nb = (nbits + 7) / 8;
-    std::vector<uint8_t> buf(nb);
-    f.read(reinterpret_cast<char *>(buf.data()), nb);
-    if (!f) throw std::runtime_error("Truncated bitvec");
-    BitVector bv(nbits);
-    for (uint32_t i = 0; i < nbits; ++i)
-        if (buf[i / 8] & (1u << (i % 8))) bv.set(i);
-    return bv;
-}
-
-static ContractionHierarchy::Side read_side(std::istream &f) {
-    ContractionHierarchy::Side s;
-    s.first_out                   = read_vec(f);
-    s.head                        = read_vec(f);
-    s.weight                      = read_vec(f);
-    s.is_shortcut_an_original_arc = read_bitvec(f);
-    s.shortcut_first_arc          = read_vec(f);
-    s.shortcut_second_arc         = read_vec(f);
-    return s;
-}
-
-static ContractionHierarchy read_chb1(const std::string &path) {
-    std::ifstream f(path, std::ios::binary);
-    if (!f) throw std::runtime_error("Cannot open: " + path);
-    char magic[4];
-    f.read(magic, 4);
-    if (std::memcmp(magic, "CHB1", 4) != 0)
-        throw std::runtime_error("Bad CHB1 magic in: " + path);
-    uint32_t ver = read_u32(f);
-    if (ver != 1)
-        throw std::runtime_error("Unsupported CHB1 version: " +
-                                 std::to_string(ver));
-    uint32_t n = read_u32(f);
-    ContractionHierarchy ch;
-    ch.rank     = read_vec(f);
-    ch.order    = read_vec(f);
-    ch.forward  = read_side(f);
-    ch.backward = read_side(f);
-    if (ch.rank.size() != n)
-        throw std::runtime_error("rank length mismatch in CHB1");
-    return ch;
 }
 
 // ── Python classes ────────────────────────────────────────────────────────────
@@ -166,11 +53,11 @@ struct PyCH {
         return result;
     }
 
-    void save(const std::string &path) const { write_chb1(ch, path); }
+    void save(const std::string &path) const { ch.save_file(path); }
 
     static PyCH load(const std::string &path) {
         PyCH r;
-        r.ch = read_chb1(path);
+        r.ch = ContractionHierarchy::load_file(path);
         return r;
     }
 
@@ -204,10 +91,16 @@ PYBIND11_MODULE(_native, m) {
             py::arg("max_pop_count") = 500,
             "Build CH from flat edge arrays (uint32 numpy or lists). Releases GIL.")
         .def("save", &PyCH::save, py::arg("path"),
-            "Write to CHB1 flat binary file.",
+            "Write to RoutingKit native binary file (loadable by any RoutingKit application).",
+            py::call_guard<py::gil_scoped_release>())
+        .def("save_file", &PyCH::save, py::arg("path"),
+            "Write to RoutingKit native binary file (matches RoutingKit C++ API name).",
             py::call_guard<py::gil_scoped_release>())
         .def_static("load", &PyCH::load, py::arg("path"),
-            "Load from CHB1 flat binary file.",
+            "Load from RoutingKit native binary file.",
+            py::call_guard<py::gil_scoped_release>())
+        .def_static("load_file", &PyCH::load, py::arg("path"),
+            "Load from RoutingKit native binary file (matches RoutingKit C++ API name).",
             py::call_guard<py::gil_scoped_release>())
         .def_property_readonly("node_count", &PyCH::node_count);
 
