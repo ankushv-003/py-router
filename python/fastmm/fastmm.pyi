@@ -31,7 +31,7 @@ class FastMapMatch:
                         on network hash, mode, and delta. UBODT is cached for reuse.
                         Accepts str or pathlib.Path for cache_dir.
         """
-    def match(self, trajectory: Trajectory, max_candidates: int = 8, *, candidate_search_radius: float, gps_error: float, reverse_tolerance: float = 0.0, reference_speed: float | None = None) -> SplitMatchResult:
+    def match(self, trajectory: Trajectory, max_candidates: int = 8, *, candidate_search_radius: float, gps_error: float, reverse_tolerance: float = 0.0, reference_speed: float | None = None, max_route_distance_factor: float = 0.0, turn_penalty_factor: float = 0.0) -> SplitMatchResult:
         """
                     Match a GPS trajectory with automatic splitting on failures.
         

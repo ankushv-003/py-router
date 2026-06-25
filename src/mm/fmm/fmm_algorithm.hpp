@@ -44,13 +44,18 @@ namespace FASTMM
                          double gps_error = 50,
                          double reverse_tolerance = 0.0,
                          TransitionMode transition_mode = TransitionMode::SHORTEST,
-                         std::optional<double> reference_speed = std::nullopt);
+                         std::optional<double> reference_speed = std::nullopt,
+                         double max_route_distance_factor = 0.0,
+                         double turn_penalty_factor = 0.0);
       int max_candidates;                    /**< Number of candidates */
       double candidate_search_radius;        /**< Search radius, in map unit*/
       double gps_error;                      /**< GPS error, in map unit */
       double reverse_tolerance;              /**< Reverse tolerance, in map unit */
       TransitionMode transition_mode;        /**< Routing mode */
       std::optional<double> reference_speed; /**< Reference speed for FASTEST mode */
+      // ---- Meili-style transition controls (0 = disabled -> identical to current behaviour) ----
+      double max_route_distance_factor;      /**< reject transition if path_cost > factor*euclidean (Meili max_route_distance_factor). 0 = off */
+      double turn_penalty_factor;            /**< tp *= exp(-factor*turn/180) on edge change; penalises U-turns/carriageway flips (Meili turn_penalty_factor). 0 = off */
     };
 
     /**
@@ -106,7 +111,9 @@ namespace FASTMM
                                             double candidate_search_radius,
                                             double gps_error,
                                             double reverse_tolerance,
-                                            std::optional<double> reference_speed);
+                                            std::optional<double> reference_speed,
+                                            double max_route_distance_factor = 0.0,
+                                            double turn_penalty_factor = 0.0);
 
     protected:
       /**
