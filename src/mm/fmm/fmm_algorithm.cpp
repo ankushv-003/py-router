@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <sstream>
 #include <iomanip>
+#include <cmath>
 
 using namespace FASTMM;
 using namespace FASTMM::CORE;
@@ -202,13 +203,17 @@ FastMapMatchConfig::FastMapMatchConfig(int max_candidates,
                                        double gps_error,
                                        double reverse_tolerance,
                                        TransitionMode transition_mode,
-                                       std::optional<double> reference_speed)
+                                       std::optional<double> reference_speed,
+                                       double max_route_distance_factor,
+                                       double turn_penalty_factor)
     : max_candidates(max_candidates),
       candidate_search_radius(candidate_search_radius),
       gps_error(gps_error),
       reverse_tolerance(reverse_tolerance),
       transition_mode(transition_mode),
-      reference_speed(reference_speed)
+      reference_speed(reference_speed),
+      max_route_distance_factor(max_route_distance_factor),
+      turn_penalty_factor(turn_penalty_factor)
 {
     // Validation
     if (transition_mode == TransitionMode::FASTEST && !reference_speed.has_value())
@@ -420,6 +425,35 @@ void FastMapMatch::update_layer(int level, TGLayer *la_ptr, TGLayer *lb_ptr, dou
                 tp = TransitionGraph::get_shortest_transition_probability(path_cost, euclidean_distance);
             }
 
+            // ---- Meili-style transition controls (opt-in; 0 = off => unchanged) ----
+            // (1) Plausibility gate: reject transitions whose routed cost is an implausible
+            //     multiple of the straight-line move (Meili max_route_distance_factor). Kills
+            //     around-the-block detours and sparse-gap fills.
+            if (config.max_route_distance_factor > 0.0 && euclidean_distance > 1e-9 &&
+                path_cost > config.max_route_distance_factor * euclidean_distance)
+            {
+                continue;
+            }
+            // (2) Turn penalty: discourage sharp turns / U-turns onto a different edge
+            //     (Meili turn_penalty_factor). A ~180 deg flip onto the opposing carriageway
+            //     is crushed -> fixes divided-road flapping.
+            if (config.turn_penalty_factor > 0.0 && iter_a->c->edge->id != iter_b->c->edge->id)
+            {
+                const auto &ga = iter_a->c->edge->geom;
+                const auto &gb = iter_b->c->edge->geom;
+                int na = ga.get_num_points(), nb = gb.get_num_points();
+                if (na >= 2 && nb >= 2)
+                {
+                    double ba = std::atan2(ga.get_y(na - 1) - ga.get_y(na - 2),
+                                           ga.get_x(na - 1) - ga.get_x(na - 2));
+                    double bb = std::atan2(gb.get_y(1) - gb.get_y(0),
+                                           gb.get_x(1) - gb.get_x(0));
+                    double turn = std::fabs((ba - bb) * 180.0 / M_PI);
+                    if (turn > 180.0) turn = 360.0 - turn;
+                    tp *= std::exp(-config.turn_penalty_factor * (turn / 180.0));
+                }
+            }
+
             double temp = iter_a->cumu_prob + log(tp) + log(iter_b->ep);
             SPDLOG_TRACE("L {} f {} t {} cost {} dist {} tp {} ep {} fcp {} tcp {}",
                          level, iter_a->c->edge->id, iter_b->c->edge->id,
@@ -449,7 +483,9 @@ PySplitMatchResult FastMapMatch::pymatch_trajectory(const CORE::Trajectory &traj
                                                     double candidate_search_radius,
                                                     double gps_error,
                                                     double reverse_tolerance,
-                                                    std::optional<double> reference_speed)
+                                                    std::optional<double> reference_speed,
+                                                    double max_route_distance_factor,
+                                                    double turn_penalty_factor)
 {
     // Algorithm: Automatic trajectory splitting with candidate reuse
     // 1. Do candidate search once for all points (performance optimization)
@@ -467,7 +503,9 @@ PySplitMatchResult FastMapMatch::pymatch_trajectory(const CORE::Trajectory &traj
         gps_error,
         reverse_tolerance,
         mode_,
-        reference_speed);
+        reference_speed,
+        max_route_distance_factor,
+        turn_penalty_factor);
     PySplitMatchResult output;
     int N = trajectory.geom.get_num_points();
 
