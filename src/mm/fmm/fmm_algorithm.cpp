@@ -426,17 +426,21 @@ void FastMapMatch::update_layer(int level, TGLayer *la_ptr, TGLayer *lb_ptr, dou
             }
 
             // ---- Meili-style transition controls (opt-in; 0 = off => unchanged) ----
-            // (1) Plausibility gate: reject transitions whose routed cost is an implausible
+            // (1) Plausibility gate: reject transitions whose routed distance is an implausible
             //     multiple of the straight-line move (Meili max_route_distance_factor). Kills
-            //     around-the-block detours and sparse-gap fills.
-            if (config.max_route_distance_factor > 0.0 && euclidean_distance > 1e-9 &&
+            //     around-the-block detours and sparse-gap fills. Only meaningful in SHORTEST mode
+            //     where path_cost is distance; in FASTEST mode path_cost is time and the
+            //     comparison against euclidean_distance would be dimensionally wrong.
+            if (config.transition_mode == TransitionMode::SHORTEST &&
+                config.max_route_distance_factor > 0.0 && euclidean_distance > 1e-9 &&
                 path_cost > config.max_route_distance_factor * euclidean_distance)
             {
                 continue;
             }
             // (2) Turn penalty: discourage sharp turns / U-turns onto a different edge
             //     (Meili turn_penalty_factor). A ~180 deg flip onto the opposing carriageway
-            //     is crushed -> fixes divided-road flapping.
+            //     is crushed -> fixes divided-road flapping. Penalises the a->b transition;
+            //     b remains reachable via other predecessors in layer a.
             if (config.turn_penalty_factor > 0.0 && iter_a->c->edge->id != iter_b->c->edge->id)
             {
                 const auto &ga = iter_a->c->edge->geom;
