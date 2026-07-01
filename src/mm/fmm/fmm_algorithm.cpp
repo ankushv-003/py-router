@@ -12,6 +12,11 @@
 #include <sstream>
 #include <iomanip>
 #include <cmath>
+#include <algorithm>
+#include <atomic>
+#include <exception>
+#include <mutex>
+#include <thread>
 
 using namespace FASTMM;
 using namespace FASTMM::CORE;
@@ -693,6 +698,96 @@ PySplitMatchResult FastMapMatch::pymatch_trajectory(const CORE::Trajectory &traj
 
     SPDLOG_DEBUG("Split matching complete: {} sub-trajectories", output.subtrajectories.size());
     return output;
+}
+
+std::vector<PySplitMatchResult> FastMapMatch::pymatch_many(const std::vector<CORE::Trajectory> &trajectories,
+                                                           int max_candidates,
+                                                           double candidate_search_radius,
+                                                           double gps_error,
+                                                           double reverse_tolerance,
+                                                           std::optional<double> reference_speed,
+                                                           double max_route_distance_factor,
+                                                           double turn_penalty_factor,
+                                                           std::optional<int> workers)
+{
+    if (trajectories.empty())
+    {
+        return {};
+    }
+
+    unsigned int worker_count = 0;
+    if (workers.has_value())
+    {
+        if (workers.value() <= 0)
+        {
+            throw std::invalid_argument("FastMapMatch::match_many: workers must be positive");
+        }
+        worker_count = static_cast<unsigned int>(workers.value());
+    }
+    else
+    {
+        worker_count = std::thread::hardware_concurrency();
+        if (worker_count == 0)
+        {
+            worker_count = 1;
+        }
+    }
+    worker_count = std::min<unsigned int>(worker_count, static_cast<unsigned int>(trajectories.size()));
+
+    std::vector<PySplitMatchResult> results(trajectories.size());
+    std::atomic<std::size_t> next_index{0};
+    std::exception_ptr first_error = nullptr;
+    std::mutex error_mutex;
+
+    auto run_worker = [&]()
+    {
+        while (true)
+        {
+            std::size_t idx = next_index.fetch_add(1, std::memory_order_relaxed);
+            if (idx >= trajectories.size())
+            {
+                break;
+            }
+            try
+            {
+                results[idx] = pymatch_trajectory(
+                    trajectories[idx],
+                    max_candidates,
+                    candidate_search_radius,
+                    gps_error,
+                    reverse_tolerance,
+                    reference_speed,
+                    max_route_distance_factor,
+                    turn_penalty_factor);
+            }
+            catch (...)
+            {
+                std::lock_guard<std::mutex> lock(error_mutex);
+                if (first_error == nullptr)
+                {
+                    first_error = std::current_exception();
+                }
+                break;
+            }
+        }
+    };
+
+    std::vector<std::thread> threads;
+    threads.reserve(worker_count);
+    for (unsigned int i = 0; i < worker_count; ++i)
+    {
+        threads.emplace_back(run_worker);
+    }
+    for (auto &thread : threads)
+    {
+        thread.join();
+    }
+
+    if (first_error != nullptr)
+    {
+        std::rethrow_exception(first_error);
+    }
+    return results;
 }
 
 std::vector<PyMatchSegment> FastMapMatch::build_py_segments(const MatchedCandidatePath &matched_path,

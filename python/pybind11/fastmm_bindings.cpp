@@ -603,5 +603,24 @@ PYBIND11_MODULE(fastmm, m)
             Note:
                 The config's transition_mode must match the mode used to create the
                 NetworkGraph and UBODT. For FASTEST mode, ensure reference_speed is set.
+        )pbdoc")
+        .def("match_many", &FastMapMatch::pymatch_many,
+             py::arg("trajectories"),
+             py::arg("max_candidates") = 8,
+             py::arg("candidate_search_radius"),
+             py::arg("gps_error"),
+             py::arg("reverse_tolerance") = 0.0,
+             py::arg("reference_speed") = std::nullopt,
+             py::arg("max_route_distance_factor") = 0.0,
+             py::arg("turn_penalty_factor") = 0.0,
+             py::arg("workers") = std::nullopt,
+             py::return_value_policy::move,
+             py::call_guard<py::gil_scoped_release>(),
+             R"pbdoc(
+            Match multiple independent GPS trajectories in parallel.
+
+            Results are returned in the same order as the input trajectories. The matching
+            parameters have the same meaning as match(). If workers is omitted, the native
+            implementation uses the machine's hardware concurrency.
         )pbdoc");
 }

@@ -17,6 +17,7 @@
 
 #include <string>
 #include <optional>
+#include <vector>
 #include <boost/property_tree/ptree.hpp>
 
 namespace FASTMM
@@ -114,6 +115,29 @@ namespace FASTMM
                                             std::optional<double> reference_speed,
                                             double max_route_distance_factor = 0.0,
                                             double turn_penalty_factor = 0.0);
+
+      /**
+       * Match independent trajectories in parallel and return results in input order.
+       * @param trajectories input trajectories
+       * @param max_candidates the number of candidates
+       * @param candidate_search_radius the search radius, in map unit
+       * @param gps_error the gps error, in map unit
+       * @param reverse_tolerance reverse tolerance, in map unit
+       * @param reference_speed reference speed for FASTEST mode (optional)
+       * @param max_route_distance_factor Meili-style route distance gate. 0 = disabled
+       * @param turn_penalty_factor Meili-style turn penalty. 0 = disabled
+       * @param workers optional worker count. nullopt uses hardware concurrency
+       * @return split match results, aligned with the input trajectory order
+       */
+      std::vector<PySplitMatchResult> pymatch_many(const std::vector<CORE::Trajectory> &trajectories,
+                                                   int max_candidates,
+                                                   double candidate_search_radius,
+                                                   double gps_error,
+                                                   double reverse_tolerance,
+                                                   std::optional<double> reference_speed,
+                                                   double max_route_distance_factor = 0.0,
+                                                   double turn_penalty_factor = 0.0,
+                                                   std::optional<int> workers = std::nullopt);
 
     protected:
       /**
