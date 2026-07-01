@@ -12,6 +12,9 @@
 
 #include "network/type.hpp"
 
+#include <string>
+#include <vector>
+
 namespace FASTMM
 {
 
@@ -147,6 +150,25 @@ namespace FASTMM
     struct PySplitMatchResult
     {
       std::vector<PySubTrajectory> subtrajectories; /**< List of sub-trajectory matches (both successful and failed) */
+    };
+
+    /**
+     * Fully materialized per-trip match output — the ETL's CSV/flag columns computed
+     * natively (no Python object tree, no GIL). cpath/opath/length/duration are already
+     * comma-joined so the Python consumer writes them verbatim. snap_flag is intentionally
+     * NOT computed here: it depends on the caller's candidate radius, so the caller derives
+     * it from match_status/n_reversed/max_snap_dist_deg (one boolean, no iteration).
+     */
+    struct PyMatchRows
+    {
+      std::string cpath;        /**< comma-joined deduped edge IDs */
+      std::string opath;        /**< comma-joined edge ID per ORIGINAL ping (-1 where dropped); length == orig_len */
+      std::string length;       /**< comma-joined per-folded-edge length, "%.6f" */
+      std::string duration;     /**< comma-joined per-folded-edge duration (s), "%.3f" */
+      std::string match_status; /**< "full" | "partial" | "failed" */
+      int n_sub = 0;            /**< total sub-trajectories (== Python n_sub) */
+      int n_reversed = 0;       /**< reversed edges over successful segments */
+      double max_snap_dist_deg = 0.0; /**< max perpendicular snap distance over successful segments */
     };
   };
 

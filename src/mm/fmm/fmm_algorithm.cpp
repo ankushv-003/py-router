@@ -790,6 +790,217 @@ std::vector<PySplitMatchResult> FastMapMatch::pymatch_many(const std::vector<COR
     return results;
 }
 
+namespace
+{
+    // Fixed-precision join helpers matching the Python ETL formatting exactly:
+    //   cpath/opath -> str(int)      length -> "%.6f"      duration -> "%.3f"
+    std::string join_ints(const std::vector<int> &xs)
+    {
+        std::string out;
+        for (std::size_t i = 0; i < xs.size(); ++i)
+        {
+            if (i)
+                out.push_back(',');
+            out += std::to_string(xs[i]);
+        }
+        return out;
+    }
+
+    std::string join_fixed(const std::vector<double> &xs, int precision)
+    {
+        std::ostringstream oss;
+        oss << std::fixed << std::setprecision(precision);
+        for (std::size_t i = 0; i < xs.size(); ++i)
+        {
+            if (i)
+                oss << ',';
+            oss << xs[i];
+        }
+        return oss.str();
+    }
+
+    // Native port of the ETL's _rows_from_result (minus snap_flag, which the caller
+    // derives from the returned scalars). Folds the deep match tree into the four
+    // output strings + status/counts in a single pass.
+    PyMatchRows materialize_rows(const PySplitMatchResult &result,
+                                 const std::vector<int> &orig_idx,
+                                 int orig_len)
+    {
+        std::vector<int> cpath;       // deduplicated edge IDs
+        std::vector<double> lengths;  // per-edge length (degrees, cumulative)
+        std::vector<double> durations;// per-edge duration (seconds)
+        std::vector<int> opath(orig_len < 0 ? 0 : orig_len, -1);
+
+        int n_success = 0;
+        const int n_total = static_cast<int>(result.subtrajectories.size());
+        int n_reversed = 0;
+        double max_snap_dist = 0.0;
+        bool any_snap = false;
+        const int orig_idx_n = static_cast<int>(orig_idx.size());
+
+        for (const auto &sub : result.subtrajectories)
+        {
+            if (sub.error_code != MatchErrorCode::SUCCESS)
+                continue;
+            ++n_success;
+            for (const auto &seg : sub.segments)
+            {
+                const int c0 = seg.p0.trajectory_index - 1;
+                const int c1 = seg.p1.trajectory_index - 1;
+                const int first_edge_id = seg.edges.empty() ? -1 : seg.edges.front().edge_id;
+                const int last_edge_id = seg.edges.empty() ? -1 : seg.edges.back().edge_id;
+                if (c0 >= 0 && c0 < orig_idx_n)
+                    opath[orig_idx[c0]] = first_edge_id;
+                if (c1 >= 0 && c1 < orig_idx_n)
+                    opath[orig_idx[c1]] = last_edge_id;
+
+                // snap distances (both endpoints) over successful segments
+                max_snap_dist = any_snap ? std::max(max_snap_dist, seg.p0.perpendicular_distance_to_matched_geometry)
+                                         : seg.p0.perpendicular_distance_to_matched_geometry;
+                any_snap = true;
+                max_snap_dist = std::max(max_snap_dist, seg.p1.perpendicular_distance_to_matched_geometry);
+
+                for (const auto &e : seg.edges)
+                {
+                    double edge_len = 0.0;
+                    double edge_dur = 0.0;
+                    if (!e.points.empty())
+                    {
+                        edge_len = e.points.back().cumulative_distance - e.points.front().cumulative_distance;
+                        const double dt = e.points.back().t - e.points.front().t;
+                        edge_dur = std::isfinite(dt) ? dt : 0.0;
+                    }
+                    if (e.reversed)
+                        ++n_reversed;
+
+                    if (!cpath.empty() && cpath.back() == e.edge_id)
+                    {
+                        lengths.back() += edge_len;
+                        durations.back() += edge_dur;
+                    }
+                    else
+                    {
+                        cpath.push_back(e.edge_id);
+                        lengths.push_back(edge_len);
+                        durations.push_back(edge_dur);
+                    }
+                }
+            }
+        }
+
+        PyMatchRows rows;
+        rows.cpath = join_ints(cpath);
+        rows.opath = join_ints(opath);
+        rows.length = join_fixed(lengths, 6);
+        rows.duration = join_fixed(durations, 3);
+        rows.n_sub = n_total;
+        rows.n_reversed = n_reversed;
+        rows.max_snap_dist_deg = any_snap ? max_snap_dist : 0.0;
+        rows.match_status = (n_success == 0) ? "failed"
+                            : (n_success < n_total) ? "partial"
+                                                    : "full";
+        return rows;
+    }
+} // namespace
+
+std::vector<PyMatchRows> FastMapMatch::pymatch_many_rows(const std::vector<CORE::Trajectory> &trajectories,
+                                                         const std::vector<std::vector<int>> &orig_idx_list,
+                                                         const std::vector<int> &orig_len_list,
+                                                         int max_candidates,
+                                                         double candidate_search_radius,
+                                                         double gps_error,
+                                                         double reverse_tolerance,
+                                                         std::optional<double> reference_speed,
+                                                         double max_route_distance_factor,
+                                                         double turn_penalty_factor,
+                                                         std::optional<int> workers)
+{
+    if (trajectories.empty())
+    {
+        return {};
+    }
+    if (orig_idx_list.size() != trajectories.size() || orig_len_list.size() != trajectories.size())
+    {
+        throw std::invalid_argument(
+            "FastMapMatch::match_many_rows: orig_idx_list and orig_len_list must match trajectories length");
+    }
+
+    unsigned int worker_count = 0;
+    if (workers.has_value())
+    {
+        if (workers.value() <= 0)
+        {
+            throw std::invalid_argument("FastMapMatch::match_many_rows: workers must be positive");
+        }
+        worker_count = static_cast<unsigned int>(workers.value());
+    }
+    else
+    {
+        worker_count = std::thread::hardware_concurrency();
+        if (worker_count == 0)
+        {
+            worker_count = 1;
+        }
+    }
+    worker_count = std::min<unsigned int>(worker_count, static_cast<unsigned int>(trajectories.size()));
+
+    std::vector<PyMatchRows> results(trajectories.size());
+    std::atomic<std::size_t> next_index{0};
+    std::exception_ptr first_error = nullptr;
+    std::mutex error_mutex;
+
+    auto run_worker = [&]()
+    {
+        while (true)
+        {
+            std::size_t idx = next_index.fetch_add(1, std::memory_order_relaxed);
+            if (idx >= trajectories.size())
+            {
+                break;
+            }
+            try
+            {
+                PySplitMatchResult match = pymatch_trajectory(
+                    trajectories[idx],
+                    max_candidates,
+                    candidate_search_radius,
+                    gps_error,
+                    reverse_tolerance,
+                    reference_speed,
+                    max_route_distance_factor,
+                    turn_penalty_factor);
+                results[idx] = materialize_rows(match, orig_idx_list[idx], orig_len_list[idx]);
+            }
+            catch (...)
+            {
+                std::lock_guard<std::mutex> lock(error_mutex);
+                if (first_error == nullptr)
+                {
+                    first_error = std::current_exception();
+                }
+                break;
+            }
+        }
+    };
+
+    std::vector<std::thread> threads;
+    threads.reserve(worker_count);
+    for (unsigned int i = 0; i < worker_count; ++i)
+    {
+        threads.emplace_back(run_worker);
+    }
+    for (auto &thread : threads)
+    {
+        thread.join();
+    }
+
+    if (first_error != nullptr)
+    {
+        std::rethrow_exception(first_error);
+    }
+    return results;
+}
+
 std::vector<PyMatchSegment> FastMapMatch::build_py_segments(const MatchedCandidatePath &matched_path,
                                                             const CompletePath &complete_path,
                                                             const std::vector<int> &indices,

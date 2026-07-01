@@ -139,6 +139,26 @@ namespace FASTMM
                                                    double turn_penalty_factor = 0.0,
                                                    std::optional<int> workers = std::nullopt);
 
+      /**
+       * Match trajectories in parallel and return each trip's ETL output rows already
+       * materialized natively (comma-joined cpath/opath/length/duration + status/counts).
+       * Avoids building the Python match object tree and the serial Python fold, which
+       * dominate the map-matching stage. Results are aligned with the input order.
+       * @param orig_idx_list per-trajectory map from cleaned point index -> original ping index
+       * @param orig_len_list per-trajectory original ping count (opath length)
+       */
+      std::vector<PyMatchRows> pymatch_many_rows(const std::vector<CORE::Trajectory> &trajectories,
+                                                 const std::vector<std::vector<int>> &orig_idx_list,
+                                                 const std::vector<int> &orig_len_list,
+                                                 int max_candidates,
+                                                 double candidate_search_radius,
+                                                 double gps_error,
+                                                 double reverse_tolerance,
+                                                 std::optional<double> reference_speed,
+                                                 double max_route_distance_factor = 0.0,
+                                                 double turn_penalty_factor = 0.0,
+                                                 std::optional<int> workers = std::nullopt);
+
     protected:
       /**
        * Match a trajectory to the road network

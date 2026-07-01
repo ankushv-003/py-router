@@ -290,6 +290,29 @@ PYBIND11_MODULE(fastmm, m)
                         " success=" + std::to_string(success_count) +
                         " failed=" + std::to_string(failed_count) + ">"; });
 
+    // MatchRows struct — fully materialized ETL output row for one trip
+    py::class_<PyMatchRows>(m, "MatchRows", R"pbdoc(
+        A single trip's map-matching output, materialized natively.
+
+        cpath/opath/length/duration are already comma-joined strings ready to write
+        to CSV verbatim; opath has one entry per ORIGINAL GPS ping (-1 where dropped).
+        snap_flag is not included — derive it from match_status, n_reversed and
+        max_snap_dist_deg using your candidate radius.
+    )pbdoc")
+        .def_readonly("cpath", &PyMatchRows::cpath, "Comma-joined deduplicated edge IDs")
+        .def_readonly("opath", &PyMatchRows::opath, "Comma-joined edge ID per original ping (-1 where dropped)")
+        .def_readonly("length", &PyMatchRows::length, "Comma-joined per-edge length (%.6f)")
+        .def_readonly("duration", &PyMatchRows::duration, "Comma-joined per-edge duration in seconds (%.3f)")
+        .def_readonly("match_status", &PyMatchRows::match_status, "'full' | 'partial' | 'failed'")
+        .def_readonly("n_sub", &PyMatchRows::n_sub, "Total number of sub-trajectories")
+        .def_readonly("n_reversed", &PyMatchRows::n_reversed, "Reversed edges over successful segments")
+        .def_readonly("max_snap_dist_deg", &PyMatchRows::max_snap_dist_deg,
+                      "Max perpendicular snap distance over successful segments")
+        .def("__repr__", [](const PyMatchRows &r)
+             { return "<MatchRows status=" + r.match_status +
+                      " n_sub=" + std::to_string(r.n_sub) +
+                      " n_reversed=" + std::to_string(r.n_reversed) + ">"; });
+
     // Trajectory struct
     py::class_<Trajectory>(m, "Trajectory", R"pbdoc(
         A GPS trajectory consisting of sequential observations.
@@ -622,5 +645,29 @@ PYBIND11_MODULE(fastmm, m)
             Results are returned in the same order as the input trajectories. The matching
             parameters have the same meaning as match(). If workers is omitted, the native
             implementation uses the machine's hardware concurrency.
+        )pbdoc")
+        .def("match_many_rows", &FastMapMatch::pymatch_many_rows,
+             py::arg("trajectories"),
+             py::arg("orig_idx_list"),
+             py::arg("orig_len_list"),
+             py::arg("max_candidates") = 8,
+             py::arg("candidate_search_radius"),
+             py::arg("gps_error"),
+             py::arg("reverse_tolerance") = 0.0,
+             py::arg("reference_speed") = std::nullopt,
+             py::arg("max_route_distance_factor") = 0.0,
+             py::arg("turn_penalty_factor") = 0.0,
+             py::arg("workers") = std::nullopt,
+             py::return_value_policy::move,
+             py::call_guard<py::gil_scoped_release>(),
+             R"pbdoc(
+            Match many trajectories in parallel and return each trip's ETL output row
+            fully materialized natively (comma-joined cpath/opath/length/duration plus
+            match_status/n_sub/n_reversed/max_snap_dist_deg).
+
+            orig_idx_list[i] maps trajectory i's cleaned point index to its original ping
+            index; orig_len_list[i] is that trip's original ping count (the opath length).
+            Both must be the same length as trajectories. This avoids building the Python
+            match object tree and the serial Python fold, which dominate the matching stage.
         )pbdoc");
 }
