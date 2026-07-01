@@ -64,6 +64,63 @@ def test_fastmapmatch_with_preloaded_ubodt(tmp_path):
     assert result.subtrajectories[0].error_code == MatchErrorCode.SUCCESS
 
 
+def test_match_many_matches_sequential_results_in_order(tmp_path):
+    """Batch matching should preserve input order and match() semantics."""
+    net = _build_line_network()
+    graph = NetworkGraph(net, TransitionMode.SHORTEST)
+    gen = UBODTGenAlgorithm(net, graph, TransitionMode.SHORTEST)
+    ubodt_file = tmp_path / "batch.bin"
+    gen.generate_ubodt(str(ubodt_file), delta=500.0, network_hash=net.compute_hash())
+    ubodt = UBODT.read_ubodt(str(ubodt_file))
+    matcher = FastMapMatch(net, TransitionMode.SHORTEST, ubodt)
+
+    trajectories = [
+        Trajectory.from_xy_tuples([(10.0, 0.0), (90.0, 0.0)]),
+        Trajectory.from_xy_tuples([(110.0, 0.0), (190.0, 0.0)]),
+        Trajectory.from_xy_tuples([(20.0, 0.0), (180.0, 0.0)]),
+    ]
+
+    sequential = [
+        matcher.match(traj, candidate_search_radius=50.0, gps_error=20.0)
+        for traj in trajectories
+    ]
+    batched = matcher.match_many(
+        trajectories,
+        candidate_search_radius=50.0,
+        gps_error=20.0,
+        workers=2,
+    )
+
+    assert len(batched) == len(sequential)
+    for batch_result, seq_result in zip(batched, sequential):
+        assert len(batch_result.subtrajectories) == len(seq_result.subtrajectories)
+        assert [sub.error_code for sub in batch_result.subtrajectories] == [
+            sub.error_code for sub in seq_result.subtrajectories
+        ]
+        assert [
+            [edge.edge_id for segment in sub.segments for edge in segment.edges]
+            for sub in batch_result.subtrajectories
+        ] == [
+            [edge.edge_id for segment in sub.segments for edge in segment.edges]
+            for sub in seq_result.subtrajectories
+        ]
+
+
+def test_match_many_rejects_non_positive_workers(tmp_path):
+    """The batch API should fail fast on invalid worker counts."""
+    net = _build_line_network()
+    graph = NetworkGraph(net, TransitionMode.SHORTEST)
+    gen = UBODTGenAlgorithm(net, graph, TransitionMode.SHORTEST)
+    ubodt_file = tmp_path / "batch-workers.bin"
+    gen.generate_ubodt(str(ubodt_file), delta=500.0, network_hash=net.compute_hash())
+    ubodt = UBODT.read_ubodt(str(ubodt_file))
+    matcher = FastMapMatch(net, TransitionMode.SHORTEST, ubodt)
+    traj = Trajectory.from_xy_tuples([(10.0, 0.0), (90.0, 0.0)])
+
+    with pytest.raises(ValueError, match="workers"):
+        matcher.match_many([traj], candidate_search_radius=50.0, gps_error=20.0, workers=0)
+
+
 def test_one_ubodt_shared_across_two_matchers(tmp_path):
     """A UBODT bound to two FastMapMatch instances must keep both alive
     and produce equivalent successful matches."""
