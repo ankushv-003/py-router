@@ -44,3 +44,14 @@ def test_harvest_gated_after_stock_run():
     q.reset(); q.add_source(0); q.add_target(3); q.run()   # stock, not query_for_alt
     nodes, vlens = q.via_candidates(256)
     assert nodes == [] and vlens == []   # alt_state_valid must be false
+
+def test_harvest_gated_after_bare_run_following_alt():
+    # A bare run() AFTER a query_for_alt (no intervening reset) must invalidate
+    # the alt state: run()'s stall-pruned labels are unsafe to harvest.
+    ch = _ch()
+    q = ch_router.CHQuery(ch)
+    q.query_for_alt(0, 3, 3.0)
+    assert len(q.via_candidates(256)[0]) >= 1      # harvest works right after alt
+    q.add_source(0); q.add_target(3); q.run()      # bare stock run, no reset
+    nodes, vlens = q.via_candidates(256)
+    assert nodes == [] and vlens == []             # run() cleared alt_state_valid

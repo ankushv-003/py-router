@@ -77,7 +77,11 @@ struct PyCHQuery {
     PyCHQuery &reset()               { alt_state_valid = false; q.reset(); return *this; }
     PyCHQuery &add_source(unsigned s){ q.add_source(s); return *this; }
     PyCHQuery &add_target(unsigned t){ q.add_target(t); return *this; }
-    PyCHQuery &run()                 { q.run();         return *this; }
+    // A stock run() uses stall-on-demand, whose pruned tentative labels are
+    // unsafe for ADGW harvesting. Invalidate the alt state so a bare run()
+    // after query_for_alt (without an intervening reset) cannot be harvested —
+    // mirrors the reference's stock-query entrypoint. See ch_alt.hpp.
+    PyCHQuery &run()                 { alt_state_valid = false; q.run(); return *this; }
     unsigned   get_distance()        { return q.get_distance(); }
     std::vector<unsigned> get_node_path() { return q.get_node_path(); }
     std::vector<unsigned> get_arc_path()  { return q.get_arc_path(); }
