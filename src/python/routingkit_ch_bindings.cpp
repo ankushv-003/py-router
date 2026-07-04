@@ -8,6 +8,8 @@
 
 #include <routingkit/contraction_hierarchy.h>
 
+#include "ch_alt.hpp"
+
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
@@ -66,15 +68,33 @@ struct PyCH {
 
 struct PyCHQuery {
     ContractionHierarchyQuery q;
-    explicit PyCHQuery(const PyCH &c) : q(c.ch) {}
+    const ContractionHierarchy& ch;          // read-only, pinned via keep_alive
+    std::vector<unsigned> touched_fwd;
+    uint64_t alt_bound = 0;
+    bool alt_state_valid = false;
+    explicit PyCHQuery(const PyCH &c) : q(c.ch), ch(c.ch) {}
 
-    PyCHQuery &reset()               { q.reset();       return *this; }
+    PyCHQuery &reset()               { alt_state_valid = false; q.reset(); return *this; }
     PyCHQuery &add_source(unsigned s){ q.add_source(s); return *this; }
     PyCHQuery &add_target(unsigned t){ q.add_target(t); return *this; }
     PyCHQuery &run()                 { q.run();         return *this; }
     unsigned   get_distance()        { return q.get_distance(); }
     std::vector<unsigned> get_node_path() { return q.get_node_path(); }
     std::vector<unsigned> get_arc_path()  { return q.get_arc_path(); }
+
+    unsigned query_for_alt(unsigned src, unsigned dst, double cap) {
+        return ch_alt::query_for_alt(q, ch, touched_fwd, alt_bound, alt_state_valid, src, dst, cap);
+    }
+    std::pair<std::vector<unsigned>, std::vector<unsigned>> via_candidates(unsigned max_n) {
+        std::vector<unsigned> nodes, vlens;
+        ch_alt::via_candidates(q, ch, touched_fwd, alt_bound, alt_state_valid, max_n, nodes, vlens);
+        return {std::move(nodes), std::move(vlens)};
+    }
+    std::tuple<unsigned, std::vector<unsigned>, std::vector<unsigned>> path_via(unsigned via) {
+        std::vector<unsigned> np, ap;
+        unsigned d = ch_alt::path_via(q, ch, alt_state_valid, via, np, ap);
+        return {d, std::move(np), std::move(ap)};
+    }
 };
 
 // ── Module ────────────────────────────────────────────────────────────────────
@@ -122,7 +142,17 @@ PYBIND11_MODULE(_native, m) {
         .def("get_node_path", &PyCHQuery::get_node_path,
              py::call_guard<py::gil_scoped_release>())
         .def("get_arc_path",  &PyCHQuery::get_arc_path,
-             py::call_guard<py::gil_scoped_release>());
+             py::call_guard<py::gil_scoped_release>())
+        .def("query_for_alt", &PyCHQuery::query_for_alt,
+             py::arg("src"), py::arg("dst"), py::arg("cap"),
+             py::call_guard<py::gil_scoped_release>(),
+             "Run the no-stall bidirectional ADGW search. Returns primary distance "
+             "(INF_WEIGHT if unreachable). Enables via_candidates/path_via.")
+        .def("via_candidates", &PyCHQuery::via_candidates, py::arg("max_n"),
+             "After query_for_alt: (nodes, via_lens) ascending by via_len, <= max_n.")
+        .def("path_via", &PyCHQuery::path_via, py::arg("via"),
+             "After query_for_alt: (dist, node_path, arc_path) for src->via->dst; "
+             "dist==INF_WEIGHT and empty paths on failure.");
 
     m.attr("INF_WEIGHT") = py::int_(RoutingKit::inf_weight);
 }
