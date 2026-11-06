@@ -528,6 +528,9 @@ PYBIND11_MODULE(fastmm, m)
             py::arg("max_distance_between_candidates") = std::nullopt,
             py::arg("max_time_between_candidates") = std::nullopt,
             py::arg("cache_dir") = "./ubodt_cache",
+            // FastMapMatch stores a reference to the Network: pin it for the matcher's lifetime,
+            // else a matcher that outlives its Network reads freed memory (SIGSEGV/SIGBUS in search_tr_cs_knn).
+            py::keep_alive<1, 2>(),
             R"pbdoc(
             Create a FastMapMatch instance with automatic UBODT management.
 
@@ -547,6 +550,7 @@ PYBIND11_MODULE(fastmm, m)
              py::arg("network"),
              py::arg("mode"),
              py::arg("ubodt"),
+             py::keep_alive<1, 2>(),   // pin the Network (see above); the UBODT is held by shared_ptr
              R"pbdoc(
             Create a FastMapMatch instance from a pre-loaded UBODT.
 
