@@ -17,11 +17,70 @@
 #include <exception>
 #include <mutex>
 #include <thread>
+#include <system_error>
+#include <cerrno>
+#include <stdexcept>
+#ifndef _WIN32
+#include <fcntl.h>
+#include <sys/file.h>
+#include <unistd.h>
+#else
+#include <process.h>
+#endif
 
 using namespace FASTMM;
 using namespace FASTMM::CORE;
 using namespace FASTMM::NETWORK;
 using namespace FASTMM::MM;
+
+namespace
+{
+    // Exclusive advisory lock on a file, released on destruction (also if the process dies).
+    // POSIX flock; on Windows it is a no-op (the temp-file + rename still keeps readers off partial files).
+    class CacheFileLock
+    {
+    public:
+        explicit CacheFileLock(const std::string &path)
+        {
+#ifndef _WIN32
+            fd_ = ::open(path.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0644);
+            if (fd_ < 0)
+                throw std::runtime_error("FastMapMatch: cannot open UBODT cache lock " + path);
+            while (::flock(fd_, LOCK_EX) != 0)
+            {
+                if (errno != EINTR)
+                {
+                    ::close(fd_);
+                    throw std::runtime_error("FastMapMatch: cannot lock UBODT cache lock " + path);
+                }
+            }
+#else
+            (void)path;
+#endif
+        }
+        ~CacheFileLock()
+        {
+#ifndef _WIN32
+            if (fd_ >= 0)
+                ::close(fd_);
+#endif
+        }
+        CacheFileLock(const CacheFileLock &) = delete;
+        CacheFileLock &operator=(const CacheFileLock &) = delete;
+
+    private:
+        int fd_ = -1;
+    };
+
+    long current_pid()
+    {
+#ifndef _WIN32
+        return static_cast<long>(::getpid());
+#else
+        return static_cast<long>(::_getpid());
+#endif
+    }
+} // namespace
 
 FastMapMatch::FastMapMatch(const Network &network,
                            TransitionMode mode,
@@ -79,18 +138,35 @@ FastMapMatch::FastMapMatch(const Network &network,
                 (mode == TransitionMode::SHORTEST ? "SHORTEST" : "FASTEST"),
                 delta, ubodt_path.string());
 
-    // Generate or load UBODT
-    if (!std::filesystem::exists(ubodt_path))
+    // Generate or load UBODT.
+    // Several processes may share one cache_dir. Hold an exclusive lock on <file>.lock across the
+    // exists-check and generation so only one process generates and the rest wait and reuse its file,
+    // and write to a temp name renamed into place so a partially written UBODT is never visible.
     {
-        SPDLOG_INFO("Generating UBODT and saving to {}", ubodt_path.string());
-        SPDLOG_INFO("This may take a while for large networks...");
+        CacheFileLock lock(ubodt_path.string() + ".lock");
+        if (!std::filesystem::exists(ubodt_path))
+        {
+            SPDLOG_INFO("Generating UBODT and saving to {}", ubodt_path.string());
+            SPDLOG_INFO("This may take a while for large networks...");
 
-        UBODTGenAlgorithm ubodt_gen(network_, graph_, mode);
-        ubodt_gen.generate_ubodt(ubodt_path.string(), delta, network_hash);
-    }
-    else
-    {
-        SPDLOG_INFO("Found cached UBODT at {}", ubodt_path.string());
+            const std::string tmp_path = ubodt_path.string() + ".tmp." + std::to_string(current_pid());
+            try
+            {
+                UBODTGenAlgorithm ubodt_gen(network_, graph_, mode);
+                ubodt_gen.generate_ubodt(tmp_path, delta, network_hash);
+                std::filesystem::rename(tmp_path, ubodt_path);
+            }
+            catch (...)
+            {
+                std::error_code ec;
+                std::filesystem::remove(tmp_path, ec);
+                throw;
+            }
+        }
+        else
+        {
+            SPDLOG_INFO("Found cached UBODT at {}", ubodt_path.string());
+        }
     }
 
     // Load UBODT and validate
