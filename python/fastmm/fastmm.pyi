@@ -123,7 +123,7 @@ class MatchCandidate:
     @property
     def trajectory_index(self) -> int:
         """
-        1-based trajectory point index for this matched candidate
+        0-based index of the trajectory point this candidate was matched from
         """
     @property
     def x(self) -> float:

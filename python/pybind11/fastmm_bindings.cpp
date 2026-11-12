@@ -214,7 +214,7 @@ PYBIND11_MODULE(fastmm, m)
                                { return c.t < 0 ? std::nullopt : std::optional<double>(c.t); }, "Timestamp of the original GPS observation (if trajectory has time)")
         .def_readonly("perpendicular_distance_to_matched_geometry", &PyMatchCandidate::perpendicular_distance_to_matched_geometry, "Perpendicular distance from GPS point to the matched edge geometry")
         .def_readonly("offset_from_start_of_edge", &PyMatchCandidate::offset_from_start_of_edge, "Distance from the start of the candidate edge to this match location")
-        .def_readonly("trajectory_index", &PyMatchCandidate::trajectory_index, "1-based trajectory point index for this matched candidate")
+        .def_readonly("trajectory_index", &PyMatchCandidate::trajectory_index, "0-based index of the trajectory point this candidate was matched from")
         .def("__repr__", [](const PyMatchCandidate &c)
              { return "<Candidate x=" + fmt::format("{:.1f}", c.x) +
                       " y=" + fmt::format("{:.1f}", c.y) +

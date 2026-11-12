@@ -297,7 +297,7 @@ class TestMatchResult:
                 assert hasattr(edge, "points")
 
     def test_match_candidate_has_trajectory_index(self):
-        """Test that MatchCandidate exposes 1-based trajectory_index for trajectory observation points."""
+        """Test that MatchCandidate exposes 0-based trajectory_index for trajectory observation points."""
         network = Network()
         network.add_edge(1, source=1, target=2, geom=[(0, 0), (100, 0)], speed=50)
         network.finalize()
