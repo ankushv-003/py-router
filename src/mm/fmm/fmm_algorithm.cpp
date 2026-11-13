@@ -921,8 +921,8 @@ namespace
             ++n_success;
             for (const auto &seg : sub.segments)
             {
-                const int c0 = seg.p0.trajectory_index - 1;
-                const int c1 = seg.p1.trajectory_index - 1;
+                const int c0 = seg.p0.trajectory_index;  // 0-based cleaned-point index
+                const int c1 = seg.p1.trajectory_index;
                 const int first_edge_id = seg.edges.empty() ? -1 : seg.edges.front().edge_id;
                 const int last_edge_id = seg.edges.empty() ? -1 : seg.edges.back().edge_id;
                 if (c0 >= 0 && c0 < orig_idx_n)

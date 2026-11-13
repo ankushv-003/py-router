@@ -36,8 +36,8 @@ def ref_rows(coords, orig_idx, result):
         if sub.error_code != MatchErrorCode.SUCCESS:
             continue
         for seg in sub.segments:
-            c0 = seg.p0.trajectory_index - 1
-            c1 = seg.p1.trajectory_index - 1
+            c0 = seg.p0.trajectory_index
+            c1 = seg.p1.trajectory_index
             first_edge_id = seg.edges[0].edge_id if seg.edges else -1
             last_edge_id = seg.edges[-1].edge_id if seg.edges else -1
             if 0 <= c0 < len(orig_idx):
