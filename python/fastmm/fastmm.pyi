@@ -4,7 +4,7 @@ Fast Map Matching (FASTMM) Python bindings via pybind11
 # Hand-maintained type stubs. Update by hand when bindings change.
 from __future__ import annotations
 import typing
-__all__: list[str] = ['CANDIDATES_NOT_FOUND', 'DISCONNECTED_LAYERS', 'FASTEST', 'FastMapMatch', 'INDEX_OUT_OF_BOUNDS', 'INDEX_OUT_OF_BOUNDS_END', 'MatchCandidate', 'MatchErrorCode', 'MatchPoint', 'MatchSegment', 'MatchSegmentEdge', 'Network', 'NetworkGraph', 'SHORTEST', 'SUCCESS', 'SplitMatchResult', 'SubTrajectory', 'Trajectory', 'TransitionMode', 'UNKNOWN_ERROR']
+__all__: list[str] = ['CANDIDATES_NOT_FOUND', 'DISCONNECTED_LAYERS', 'FASTEST', 'FastMapMatch', 'INDEX_OUT_OF_BOUNDS', 'INDEX_OUT_OF_BOUNDS_END', 'MatchCandidate', 'Break', 'BreakType', 'MatchErrorCode', 'MatchPoint', 'MatchSegment', 'MatchSegmentEdge', 'Network', 'NetworkGraph', 'SHORTEST', 'SUCCESS', 'SplitMatchResult', 'SubTrajectory', 'Trajectory', 'TransitionMode', 'UNKNOWN_ERROR']
 class FastMapMatch:
     """
     
@@ -230,6 +230,49 @@ class MatchPoint:
         """
         Y coordinate of the matched point
         """
+class BreakType:
+    """
+    Likely cause of a break between two matched pieces.
+
+    Members: NO_ROAD, BACKWARD, ONEWAY_CONTRA, DIVIDED_CONTRA, DETOUR, UNREACHABLE, OTHER
+    """
+    NO_ROAD: typing.ClassVar[BreakType]  # value = <BreakType.NO_ROAD: 1>
+    BACKWARD: typing.ClassVar[BreakType]  # value = <BreakType.BACKWARD: 2>
+    ONEWAY_CONTRA: typing.ClassVar[BreakType]  # value = <BreakType.ONEWAY_CONTRA: 3>
+    DIVIDED_CONTRA: typing.ClassVar[BreakType]  # value = <BreakType.DIVIDED_CONTRA: 4>
+    DETOUR: typing.ClassVar[BreakType]  # value = <BreakType.DETOUR: 5>
+    UNREACHABLE: typing.ClassVar[BreakType]  # value = <BreakType.UNREACHABLE: 6>
+    OTHER: typing.ClassVar[BreakType]  # value = <BreakType.OTHER: 9>
+    __members__: typing.ClassVar[dict[str, BreakType]]
+    def __init__(self, value: int) -> None:
+        ...
+    def __int__(self) -> int:
+        ...
+    @property
+    def name(self) -> str:
+        ...
+    @property
+    def value(self) -> int:
+        ...
+class Break:
+    """
+    One break interval: points index -> index + 1 are not in one matched piece
+    """
+    @property
+    def index(self) -> int:
+        """
+        0-based index of the first point of the interval
+        """
+    @property
+    def type(self) -> BreakType:
+        """
+        BreakType: likely cause
+        """
+    @property
+    def route_ratio(self) -> float:
+        """
+        Shortest legal route / straight line (DETOUR only, else -1)
+        """
 class MatchSegment:
     """
     
@@ -402,6 +445,11 @@ class SplitMatchResult:
     """
     def __repr__(self) -> str:
         ...
+    @property
+    def breaks(self) -> list[Break]:
+        """
+        List of Break objects: every interval not inside one successful piece, with its likely cause
+        """
     @property
     def subtrajectories(self) -> list[SubTrajectory]:
         """
