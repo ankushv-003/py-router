@@ -32,6 +32,26 @@ PYBIND11_MODULE(fastmm, m)
         .value("UNKNOWN_ERROR", MatchErrorCode::UNKNOWN_ERROR, "Unknown error occurred")
         .export_values();
 
+    // BreakType enum (likely cause of a break between two matched pieces)
+    py::enum_<BreakType>(m, "BreakType")
+        .value("NO_ROAD", BreakType::NO_ROAD, "A point has no candidate within the search radius")
+        .value("BACKWARD", BreakType::BACKWARD, "Nearest candidates on the same edge, moving backwards (GPS jitter)")
+        .value("ONEWAY_CONTRA", BreakType::ONEWAY_CONTRA,
+               "Nearest road runs against the movement with no reverse edge and no aligned road nearby")
+        .value("DIVIDED_CONTRA", BreakType::DIVIDED_CONTRA,
+               "Nearest road runs against the movement; an aligned road (other carriageway) is also nearby")
+        .value("DETOUR", BreakType::DETOUR, "Aligned roads, but the legal route is longer than the route gate")
+        .value("UNREACHABLE", BreakType::UNREACHABLE, "Aligned roads, but no legal route within the UBODT bound")
+        .value("OTHER", BreakType::OTHER, "Unclassified");
+
+    py::class_<PyBreak>(m, "Break", "One break interval: points index -> index + 1 are not in one matched piece")
+        .def_readonly("index", &PyBreak::index, "0-based index of the first point of the interval")
+        .def_readonly("type", &PyBreak::type, "BreakType: likely cause")
+        .def_readonly("route_ratio", &PyBreak::route_ratio,
+                      "Shortest legal route / straight line (DETOUR only, else -1)")
+        .def("__repr__", [](const PyBreak &b)
+             { return "<Break index=" + std::to_string(b.index) + " type=" + std::to_string(static_cast<int>(b.type)) + ">"; });
+
     // TransitionMode enum
     py::enum_<TransitionMode>(m, "TransitionMode")
         .value("SHORTEST", TransitionMode::SHORTEST, "Distance-based routing")
@@ -275,6 +295,8 @@ PYBIND11_MODULE(fastmm, m)
     )pbdoc")
         .def_readonly("subtrajectories", &PySplitMatchResult::subtrajectories,
                       "List of SubTrajectory objects (both successful and failed portions)")
+        .def_readonly("breaks", &PySplitMatchResult::breaks,
+                      "List of Break objects: every interval not inside one successful piece, with its likely cause")
         .def("__repr__", [](const PySplitMatchResult &r)
              {
                  int success_count = 0;
@@ -308,6 +330,20 @@ PYBIND11_MODULE(fastmm, m)
         .def_readonly("n_reversed", &PyMatchRows::n_reversed, "Reversed edges over successful segments")
         .def_readonly("max_snap_dist_deg", &PyMatchRows::max_snap_dist_deg,
                       "Max perpendicular snap distance over successful segments")
+        .def_readonly("n_pieces", &PyMatchRows::n_pieces, "Successfully matched sub-trajectories (pieces)")
+        .def_readonly("piece_starts", &PyMatchRows::piece_starts,
+                      "Comma-joined cpath index where each piece starts. cpath is not broken between pieces; "
+                      "consecutive pieces are NOT connected on the network. A piece that starts on the edge the "
+                      "previous one ended on shares that cpath entry.")
+        .def_readonly("n_pts", &PyMatchRows::n_pts, "Points in the input trajectory")
+        .def_readonly("n_pts_matched", &PyMatchRows::n_pts_matched, "Points inside a successful piece")
+        .def_readonly("gap_length", &PyMatchRows::gap_length,
+                      "Straight-line length (coordinate units) of all point-to-point intervals not inside one piece: "
+                      "the break distance missing from cpath/length. Add it to bridge breaks.")
+        .def_readonly("break_idx", &PyMatchRows::break_idx,
+                      "Comma-joined index i of every break interval (point i -> i+1), 0-based cleaned-point index")
+        .def_readonly("break_type", &PyMatchRows::break_type,
+                      "Comma-joined int(BreakType) of every break interval, same order as break_idx")
         .def("__repr__", [](const PyMatchRows &r)
              { return "<MatchRows status=" + r.match_status +
                       " n_sub=" + std::to_string(r.n_sub) +
