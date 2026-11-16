@@ -134,6 +134,31 @@ namespace FASTMM
     };
 
     /**
+     * Why consecutive points i -> i+1 are not in one matched piece (a break). The classes point at
+     * the likely cause so breaks aggregated over many trips can flag map problems.
+     */
+    enum class BreakType : int
+    {
+      NO_ROAD = 1,        /**< a point of the interval has no candidate within the search radius (road missing, off-road, premises) */
+      BACKWARD = 2,       /**< nearest candidates on the same edge, the second at most max(gps_error, reverse_tolerance) behind the first (GPS jitter) */
+      ONEWAY_CONTRA = 3,  /**< nearest road runs against the movement, has no reverse edge, and no separate parallel road runs with the movement nearby: wrong-way riding or a wrong one-way tag */
+      DIVIDED_CONTRA = 4, /**< nearest road runs against the movement, and a parallel road with the movement that is not attached to it is near either point: other carriageway of a divided road (median crossing, missing opening) */
+      DETOUR = 5,         /**< aligned roads on both sides, but the legal route is longer than the route gate allows: missing turn / link / median opening */
+      UNREACHABLE = 6,    /**< aligned roads on both sides, but no legal route within the UBODT bound: missing connection or one-way trap */
+      OTHER = 9           /**< anything else (should not happen) */
+    };
+
+    /**
+     * One break interval (point index -> index + 1)
+     */
+    struct PyBreak
+    {
+      int index = -1;                       /**< 0-based index of the first point of the interval */
+      BreakType type = BreakType::OTHER;    /**< likely cause */
+      double route_ratio = -1.0;            /**< shortest legal route / straight line over candidate pairs (DETOUR); -1 if not computed or unreachable */
+    };
+
+    /**
      * A continuous sub-trajectory match result (portion of trajectory that could be matched)
      */
     struct PySubTrajectory
@@ -150,6 +175,7 @@ namespace FASTMM
     struct PySplitMatchResult
     {
       std::vector<PySubTrajectory> subtrajectories; /**< List of sub-trajectory matches (both successful and failed) */
+      std::vector<PyBreak> breaks;                  /**< Every interval not inside one successful piece, in order, with its likely cause */
     };
 
     /**
@@ -169,6 +195,14 @@ namespace FASTMM
       int n_sub = 0;            /**< total sub-trajectories (== Python n_sub) */
       int n_reversed = 0;       /**< reversed edges over successful segments */
       double max_snap_dist_deg = 0.0; /**< max perpendicular snap distance over successful segments */
+      // Piece/break information (additive; cpath and match_status are unchanged).
+      int n_pieces = 0;          /**< successfully matched sub-trajectories (pieces) */
+      std::string piece_starts;  /**< comma-joined cpath index where each piece starts (shares the entry if a piece starts on the edge the previous one ended on) */
+      int n_pts = 0;             /**< points in the (cleaned) input trajectory */
+      int n_pts_matched = 0;     /**< points inside a successful piece */
+      double gap_length = 0.0;   /**< straight-line length (coordinate units) of every point-to-point interval NOT inside one piece: the break metres cpath leaves out */
+      std::string break_idx;     /**< comma-joined index i of every break interval (i -> i+1) */
+      std::string break_type;    /**< comma-joined BreakType code of every break interval (same order) */
     };
   };
 

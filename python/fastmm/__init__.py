@@ -25,6 +25,8 @@ __all__ = [
     "SubTrajectory",
     "SplitMatchResult",
     "MatchErrorCode",
+    "Break",
+    "BreakType",
     # Enums
     "TransitionMode",
 ]

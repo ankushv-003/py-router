@@ -13,6 +13,7 @@
 #include <iomanip>
 #include <cmath>
 #include <algorithm>
+#include <map>
 #include <atomic>
 #include <exception>
 #include <mutex>
@@ -563,6 +564,122 @@ void FastMapMatch::update_layer(int level, TGLayer *la_ptr, TGLayer *lb_ptr, dou
     }
 }
 
+namespace
+{
+    // Unit direction of an edge polyline at a given offset from its start.
+    bool edge_direction_at(const FASTMM::NETWORK::Edge &e, double offset, double *dx, double *dy)
+    {
+        const auto &g = e.geom;
+        const int n = g.get_num_points();
+        double acc = 0.0;
+        for (int k = 0; k + 1 < n; ++k)
+        {
+            const double sx = g.get_x(k + 1) - g.get_x(k), sy = g.get_y(k + 1) - g.get_y(k);
+            const double sl = std::hypot(sx, sy);
+            if (sl <= 0.0)
+                continue;
+            if (acc + sl >= offset || k + 2 == n)
+            {
+                *dx = sx / sl;
+                *dy = sy / sl;
+                return true;
+            }
+            acc += sl;
+        }
+        return false;
+    }
+
+    const FASTMM::MM::Candidate *nearest(const FASTMM::MM::PointCandidates &cs)
+    {
+        const FASTMM::MM::Candidate *best = nullptr;
+        for (const auto &c : cs)
+            if (best == nullptr || c.dist < best->dist)
+                best = &c;
+        return best;
+    }
+
+    bool has_reverse(const FASTMM::MM::Candidate &c, const FASTMM::MM::PointCandidates &cs)
+    {
+        // A two-way road is two edges with swapped nodes and the same geometry, so the reverse edge is
+        // at the same distance and is in the candidate list whenever this edge is.
+        for (const auto &o : cs)
+            if (o.edge->source == c.edge->target && o.edge->target == c.edge->source)
+                return true;
+        return false;
+    }
+}
+
+PyBreak FastMapMatch::classify_break(const PointCandidates &ca, const PointCandidates &cb,
+                                     double ax, double ay, double bx, double by,
+                                     const FastMapMatchConfig &config)
+{
+    PyBreak br;
+    br.type = BreakType::OTHER;
+    const Candidate *na = nearest(ca), *nb = nearest(cb);
+    if (na == nullptr || nb == nullptr)
+    {
+        br.type = BreakType::NO_ROAD;
+        return br;
+    }
+    const double hx = bx - ax, hy = by - ay, eu = std::hypot(hx, hy);
+    // Short backward step on the same edge (GPS jitter), or no movement at all. A longer backward run
+    // along the edge is riding against it and is classified below.
+    if (eu <= 0.0 || (na->edge->id == nb->edge->id && nb->offset < na->offset &&
+                      na->offset - nb->offset <= std::max(config.gps_error, config.reverse_tolerance)))
+    {
+        br.type = BreakType::BACKWARD;
+        return br;
+    }
+    // Alignment of a candidate's edge with the movement a -> b: +1 along, -1 against.
+    auto cosang = [&](const Candidate &c)
+    {
+        double dx = 0.0, dy = 0.0;
+        if (!edge_direction_at(*c.edge, c.offset, &dx, &dy))
+            return 0.0;
+        return (dx * hx + dy * hy) / eu;
+    };
+    const double kAligned = 0.5; // within 60 degrees
+    auto contra = [&](const Candidate &c, const PointCandidates &cs)
+    { return cosang(c) < -kAligned && !has_reverse(c, cs); };
+    // The other carriageway of a divided road: a road running parallel with the movement that is not
+    // attached to the contra edge (the next segment of the same road shares a node and does not count).
+    const double kParallel = 0.9; // within ~25 degrees
+    auto has_twin = [&](const Candidate &k, const PointCandidates &cs)
+    {
+        for (const auto &c : cs)
+        {
+            if (cosang(c) <= kParallel)
+                continue;
+            const auto *e = c.edge, *f = k.edge;
+            if (e->source == f->source || e->source == f->target || e->target == f->source || e->target == f->target)
+                continue;
+            return true;
+        }
+        return false;
+    };
+    const Candidate *ck = contra(*na, ca) ? na : (contra(*nb, cb) ? nb : nullptr);
+    if (ck != nullptr)
+    {
+        br.type = (has_twin(*ck, ca) || has_twin(*ck, cb)) ? BreakType::DIVIDED_CONTRA : BreakType::ONEWAY_CONTRA;
+        return br;
+    }
+    // Aligned (or ambiguous) roads: is there any legal route, and how long is the shortest?
+    double best = std::numeric_limits<double>::infinity();
+    for (const auto &c1 : ca)
+        for (const auto &c2 : cb)
+            best = std::min(best, get_distance(&c1, &c2, config.reverse_tolerance));
+    if (std::isfinite(best))
+    {
+        br.type = BreakType::DETOUR;
+        br.route_ratio = best / eu;
+    }
+    else
+    {
+        br.type = BreakType::UNREACHABLE;
+    }
+    return br;
+}
+
 PySplitMatchResult FastMapMatch::pymatch_trajectory(const CORE::Trajectory &trajectory,
                                                     int max_candidates,
                                                     double candidate_search_radius,
@@ -599,6 +716,9 @@ PySplitMatchResult FastMapMatch::pymatch_trajectory(const CORE::Trajectory &traj
     // Do candidate search once for all points
     TrajectoryCandidates tc = network_.search_tr_cs_knn(trajectory.geom, config.max_candidates, config.candidate_search_radius);
     SPDLOG_DEBUG("Trajectory candidates found for all points");
+
+    // Likely cause of every disconnection found, keyed by the first point of the interval
+    std::map<int, PyBreak> disconnects;
 
     // Queue of ranges to process [start_idx, end_idx]
     std::vector<std::pair<int, int>> ranges_to_process;
@@ -721,6 +841,12 @@ PySplitMatchResult FastMapMatch::pymatch_trajectory(const CORE::Trajectory &traj
         {
             // DISCONNECTED_LAYERS - split at the disconnection
             int split_point = start_idx + last_connected_local;
+            PyBreak br = classify_break(tc[split_point], tc[split_point + 1],
+                                        trajectory.geom.get_x(split_point), trajectory.geom.get_y(split_point),
+                                        trajectory.geom.get_x(split_point + 1), trajectory.geom.get_y(split_point + 1),
+                                        config);
+            br.index = split_point;
+            disconnects[split_point] = br;
 
             SPDLOG_DEBUG("Disconnected layers, splitting at trajectory point {}", split_point + 1);
 
@@ -771,6 +897,39 @@ PySplitMatchResult FastMapMatch::pymatch_trajectory(const CORE::Trajectory &traj
               {
                   return a.start_index < b.start_index;
               });
+
+    // Every interval not inside one successful piece is a break; give each its likely cause.
+    {
+        std::vector<int> piece_of(N < 0 ? 0 : N, -1);
+        for (size_t k = 0; k < output.subtrajectories.size(); ++k)
+        {
+            const auto &sub = output.subtrajectories[k];
+            for (int i = std::max(sub.start_index, 0); i <= sub.end_index && i < N; ++i)
+                piece_of[i] = static_cast<int>(k);
+        }
+        for (int i = 0; i + 1 < N; ++i)
+        {
+            if (piece_of[i] >= 0 && piece_of[i] == piece_of[i + 1])
+                continue;
+            PyBreak br;
+            br.index = i;
+            if (tc[i].empty() || tc[i + 1].empty())
+                br.type = BreakType::NO_ROAD;
+            else
+            {
+                auto it = disconnects.find(i);
+                if (it != disconnects.end())
+                    br = it->second;
+                else
+                {
+                    br = classify_break(tc[i], tc[i + 1], trajectory.geom.get_x(i), trajectory.geom.get_y(i),
+                                        trajectory.geom.get_x(i + 1), trajectory.geom.get_y(i + 1), config);
+                    br.index = i;
+                }
+            }
+            output.breaks.push_back(br);
+        }
+    }
 
     SPDLOG_DEBUG("Split matching complete: {} sub-trajectories", output.subtrajectories.size());
     return output;
@@ -899,6 +1058,7 @@ namespace
     // derives from the returned scalars). Folds the deep match tree into the four
     // output strings + status/counts in a single pass.
     PyMatchRows materialize_rows(const PySplitMatchResult &result,
+                                 const CORE::Trajectory &trajectory,
                                  const std::vector<int> &orig_idx,
                                  int orig_len)
     {
@@ -914,13 +1074,28 @@ namespace
         bool any_snap = false;
         const int orig_idx_n = static_cast<int>(orig_idx.size());
 
+        const int n_pts = trajectory.geom.get_num_points();
+        std::vector<int> piece_of(n_pts < 0 ? 0 : n_pts, -1); // successful piece containing each point
+        std::vector<int> piece_starts;                          // cpath index where each piece starts
+
         for (const auto &sub : result.subtrajectories)
         {
             if (sub.error_code != MatchErrorCode::SUCCESS)
                 continue;
+            for (int i = std::max(sub.start_index, 0); i <= sub.end_index && i < n_pts; ++i)
+                piece_of[i] = n_success;
             ++n_success;
+            bool piece_open = false;
             for (const auto &seg : sub.segments)
             {
+                if (!piece_open && !seg.edges.empty())
+                {
+                    // cpath stays deduplicated across pieces, so a piece that starts on the edge the
+                    // previous piece ended on shares that cpath entry.
+                    const int e0 = seg.edges.front().edge_id;
+                    piece_starts.push_back(static_cast<int>(cpath.size()) - ((!cpath.empty() && cpath.back() == e0) ? 1 : 0));
+                    piece_open = true;
+                }
                 const int c0 = seg.p0.trajectory_index;  // 0-based cleaned-point index
                 const int c1 = seg.p1.trajectory_index;
                 const int first_edge_id = seg.edges.empty() ? -1 : seg.edges.front().edge_id;
@@ -975,6 +1150,34 @@ namespace
         rows.match_status = (n_success == 0) ? "failed"
                             : (n_success < n_total) ? "partial"
                                                     : "full";
+
+        // Breaks: every interval (i, i+1) not inside a single piece. cpath silently omits these
+        // metres; gap_length lets the caller bridge them (straight line) or flag the trip.
+        rows.n_pieces = n_success;
+        rows.piece_starts = join_ints(piece_starts);
+        rows.n_pts = n_pts;
+        int n_matched = 0;
+        double gap = 0.0;
+        for (int i = 0; i < n_pts; ++i)
+        {
+            if (piece_of[i] >= 0)
+                ++n_matched;
+            if (i + 1 < n_pts && (piece_of[i] < 0 || piece_of[i] != piece_of[i + 1]))
+                gap += std::hypot(trajectory.geom.get_x(i + 1) - trajectory.geom.get_x(i),
+                                  trajectory.geom.get_y(i + 1) - trajectory.geom.get_y(i));
+        }
+        rows.n_pts_matched = n_matched;
+        rows.gap_length = gap;
+        std::vector<int> bidx, btype;
+        bidx.reserve(result.breaks.size());
+        btype.reserve(result.breaks.size());
+        for (const auto &b : result.breaks)
+        {
+            bidx.push_back(b.index);
+            btype.push_back(static_cast<int>(b.type));
+        }
+        rows.break_idx = join_ints(bidx);
+        rows.break_type = join_ints(btype);
         return rows;
     }
 } // namespace
@@ -1045,7 +1248,7 @@ std::vector<PyMatchRows> FastMapMatch::pymatch_many_rows(const std::vector<CORE:
                     reference_speed,
                     max_route_distance_factor,
                     turn_penalty_factor);
-                results[idx] = materialize_rows(match, orig_idx_list[idx], orig_len_list[idx]);
+                results[idx] = materialize_rows(match, trajectories[idx], orig_idx_list[idx], orig_len_list[idx]);
             }
             catch (...)
             {

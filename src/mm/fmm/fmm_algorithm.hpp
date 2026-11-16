@@ -215,6 +215,16 @@ namespace FASTMM
                         const FastMapMatchConfig &config,
                         bool *connected);
       /**
+       * Classify why the interval a -> b broke (both points have candidates)
+       * @param ca candidates of point a
+       * @param cb candidates of point b
+       * @param ax,ay,bx,by point coordinates
+       * @param config map match configuration
+       */
+      PyBreak classify_break(const PointCandidates &ca, const PointCandidates &cb,
+                             double ax, double ay, double bx, double by,
+                             const FastMapMatchConfig &config);
+      /**
        * Build PyMatchSegment objects from matched path
        * Helper function for building segment output, extracted to avoid duplication
        * @param matched_path matched candidate path
